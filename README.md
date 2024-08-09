@@ -1,8 +1,8 @@
+# NOTE - this app has only been tested on the Windows OS
+
 # SyntenyQC
 ## Motivation: 
-Synteny plots are widely used for the comparison of genomic neighbourhoods, which is particularly relevant to the field of genome mining (i.e. the predicton of metabolite pathways based on genome sequence).  
-
-Whilst synteny plots are often included as part of larger software suites (e.g. the `antiSMASH` ClusterBlast module), various low-code, stand-alone tools are now available that allow users to source candidate neighbourhoods and build their own synteny plots.  However, a gap remains between: 
+Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whilst synteny plots are often included as part of larger software suites (e.g. the `antiSMASH` ClusterBlast module), various low-code, stand-alone tools are now available that allow users to source candidate neighbourhoods and build their own synteny plots.  However, a gap remains between: 
 
 **(i) tools that source these candidate neighbourhoods** (e.g. `cblaster`, which can find hundreds of candidates), 
 
@@ -17,15 +17,17 @@ Whilst synteny plots are often included as part of larger software suites (e.g. 
 ```
 pip install SyntenyQC
 ```
-Note - `SyntenyQC` depends on [BLAST+](https://blast.ncbi.nlm.nih.gov/doc/blast-help/downloadblastdata.html), which must be [installed](https://www.ncbi.nlm.nih.gov/books/NBK569861/) by the user (tested with v2.12.0 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `blastp -h` and `makeblastdb -h`. 
+Note - `SyntenyQC` depends on [BLAST+](https://blast.ncbi.nlm.nih.gov/doc/blast-help/downloadblastdata.html), which must be [installed](https://www.ncbi.nlm.nih.gov/books/NBK569861/) by the user (tested with v2.12.0 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `blastp -h` and `makeblastdb -h` in the command line. 
 
 ## Tests
 Tests are performed using [pytest](https://pypi.org/project/pytest/), but are not distributed with `SyntenyQC`.  To run tests:
 
 1) Install pytest
-2) Clone the `SyntenyQC` [github repository](https://github.com/Tim-Kirkwood/SyntenyQC).
-3) Navigate to the cloned repository (on Windows, type `cd path/to/cloned/repository`).
-4) Type `pytest`. 
+2) Clone the `SyntenyQC` github repository.
+3) Update `path/to/cloned/repository/tests/email.txt` with your email (if left blank, two webscraping tests will fail).
+4) Navigate to the cloned repository via command line (on Windows, type `cd path/to/cloned/repository`).
+5) Type `pytest` in the command line.
+ 
 ## Usage
 ### General help:
 ```
@@ -63,8 +65,7 @@ that holds the binary file (i.e. the file "path/to/binary/file.txt" will generat
 This folder will have a subdirectory called "neighbourhood", containing all of the neighbourhood genbank files
 (i.e. "path/to/binary/file/neighbourhood"). If WRITE_GENOMES is specified, a second direcory ("genome") will also
 be present, containing the entire record associated with each cblaster accession (i.e. "path/to/binary/file/genome").
-Finally, a log file will be present in the folder "path/to/binary/file", containing a summary of accessions whose 
-eighbourhoods were discarded.
+Finally, a log file will be present in the folder "path/to/binary/file", containing all run details.
 
 options:
   -h, --help            show this help message and exit
@@ -98,9 +99,9 @@ Filter redundant genomic neighbourhoods based on neighbourhood similarity:
 - Secondly, these are parsed to define reciprocal best hits between every pair of neighbourhoods.
 - Thirdly, these reciprocal best hits are used to derive a neighbourhood similarity network.  Nodes are neighbourhood
   filenames and edges indicate two neighbourhood nodes that have a similarity > SIMILARITY_FILTER.
-  Similarity = Number of RBHs / Number of proteins encoded in smallest neighbourhood in pair.
+  Similarity = Number of RBHs / Number of proteins in smallest neighbourhood in pair.
 - Finally, this network is pruned to remove neighbourhoods that exceed the user's SIMILARITY_FILTER threshold.
-  Nodes that remain are copied to the newly created folder 'genbank_folder/ClusterSieve'.
+  Nodes that remain are copied to the newly created folder 'genbank_folder/sieve_results/genbank'.
 
 options:
   -h, --help            show this help message and exit
@@ -147,11 +148,11 @@ folder/with/binary.csv
 ### Command (neighbourhood size 42566kb = 2 x BGC length):
      
 ```
+#Note - you should add your email
 SyntenyQC collect -bp path/to/BGC0000194_binary.txt -ns 42566 -em my_email@domain.com -fn organism -sp -wg
 ```
    
 ### Finishing directory structure: 
-           
 ```
 folder/with/binary/neighbourhood/organism1.gbk, organism2.gbk...organism157.gbk
                   /genomes      /organism1.gbk, organism2.gbk...organism157.gbk         ###only if -wg!
@@ -173,18 +174,18 @@ SyntenyQC sieve -gf folder/with/binary/neighbourhood -sf 0.7
 ### Finishing directory structure: 
 ```
 folder/with/binary/neighbourhood/organism1.gbk, ...
-                                /ClusterSieve/organism1.gbk, ...organism38.gbk
-                                             /log.txt
-                                             /RBH_graph.html
-                                             /RBH_histogram.html
+                                /sieve_results/blastp        /results.xml, db.txt, db.pin, ...   #call all be deleted
+                                              /genbank       /organism1.gbk, ...organism38.gbk   #use as e.g. clinker input
+                                              /visualisations/RBH_graph.html, RBH_histogram.html #see what is being pruned
+                                              /log.txt
 ```
 #### :green_heart: 38 neighbourhoods is OK for a synteny plot :green_heart:
 ## Notes 
-- Filenames are to show number of files - `neighbourhood/ClusterSieve/organism1.gbk` is in the `neighbourhood` folder, but `neighbourhood/organism1.gbk` may be different to 
-  `neighbourhood/ClusterSieve/organism1.gbk`
+- Given filenames are purely to show number of files - `neighbourhood/sieve_results/genbank/organism1.gbk` is one of the genbanks in the `neighbourhood` folder, but may be different to `neighbourhood/organism1.gbk`.
 - `RBH_graph` is an interactive html picture of the similarity graph created by `SyntenyQC sieve` (before pruning), only showing edges with a similarity > `min_edge_view`. 
  Edges are black (< `similairty_filter`) or red (>= `similarity_filter`).
 - `RBH_histogram` shows the distribution of edge weights.
+- Most neighbourhoods that meet the user-defined similarity threshold `-sf` will be removed in a single sieve run.  However, the `sieve -mts` setting can impact final results.  If a protein has homologs in 251 neighboughoods and `-mts` is 250, then one of the homologs will be missed by BLASTP, and the host neighbourhood may appear less similar to the neighbourhood with the query.  Whilst a high `-mts` setting could be used for `sieve` runs pruning many neighbourhoods, this will generate large blast files that may take up a lot of space and slow down the run.  Thus, if users wish to remove the (typically 2-3) redundant neighbourhoods remaining after a single `sieve` call, they can run sieve again on the pruned results (`syntenyqc sieve -g path/to/sieve_results/genbank -sf 0.7`).   
 
 ## References
 ### `cblaster`
