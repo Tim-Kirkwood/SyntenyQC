@@ -7,15 +7,9 @@ Created on Wed Jul 17 11:32:25 2024
 #from Bio import SeqIO
 from Bio.SeqFeature import SeqFeature
 from Bio.SeqRecord import SeqRecord
-from Bio.Blast.Record import Blast, HSP, Alignment
 
 
-
-
-
-def mock_read_good_gbk(path):
-    
-    #should all pass
+def mock_read_good_gbk(path : str) -> SeqRecord:
     test_features = [SeqFeature(type="CDS",
                                 qualifiers = {'translation' : ['a ', 
                                                                'protein1 ', 
@@ -48,15 +42,13 @@ def mock_read_good_gbk(path):
                                                                'sequence']}
                                 )
                      ]
-
-    #relevant SeqRecord attrs: features
-    #relevant SeqFeature attributes: type, qualifiers['translation'], qualifiers['pseudo'] with and without a seq
     return SeqRecord(seq = None,
                      features = test_features)
 
+def mock_makedirs(path : str):
+    pass
 
-
-def mock_get_gbk_files(folder):
+def mock_get_gbk_files(folder : str) -> list:
     return ["file1.gbk", "file2.gb"]
 
 def mock_listdir(folder : str) -> list:
