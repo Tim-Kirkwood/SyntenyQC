@@ -9,16 +9,17 @@ from Bio.SeqRecord import SeqRecord
 from http.client import IncompleteRead
 import os
 from urllib.request import HTTPError
+import logging 
 
 '''
 this module contains code for defining and writing neighbourhoods, used by 
 pipelines.collect()
 '''
 
-#TODO currently all of the neighbourhood exceptions arent logged, which isnt ideal.  
-#TODO some errors have same exception (e.g. defne neighbourhood).
 #TODO make unique exceptions for specified fail conditons 
-#TODO instead of specific error attr, have a error attr as list that you append error strings too 
+#TODO instead of specific error attr (e.g. scrape_error, motif_to_long...), have 
+#     an error attr as list that you append error strings too (will cut down the 
+#     code)
 
 class Neighbourhood:       
     '''
@@ -67,14 +68,13 @@ class Neighbourhood:
         except IncompleteRead:
             self.scrape_error = 'IncompleteRead'
         except ValueError:
-            self.scrape_error = 'ValueError - No genome found'
-            
+            self.scrape_error = 'ValueError'
+        
         if  self.scrape_error == None:
             
             #Define neighbourhood.  If motif length (motif_start - motif_end) 
             #is greater than neighbourhood_size, record and stop building 
             #Neighbourhood 
-            
             try:
                 raw_start, raw_stop = self.define_neighbourhood(motif_start, 
                                                                 motif_stop,
@@ -105,6 +105,7 @@ class Neighbourhood:
                     self.neighbourhood = self.get_neighbourhood(self.neighbourhood_start,
                                                                 self.neighbourhood_stop,
                                                                 record = self.genome)
+                    
     @staticmethod
     def scrape_genome(number_of_attempts : int, accession : str) -> SeqRecord:
         '''
@@ -158,17 +159,14 @@ class Neighbourhood:
                 return SeqIO.read(handle, 
                                   "genbank")
             
-            #if record cannot be parsed (e.g. accession was '')
+            #if record cannot be parsed (e.g. accession was '' will rase a 
+            #ValueError)
             except (IncompleteRead, ValueError) as e:
                 if attempt == number_of_attempts - 1:
                     raise e
                 else:
                     print ('Read error - trying again')
                     continue
-        
-        #this should not be possible, but if something gets through without 
-        #raising an explicit exception or returning, raise ValueError
-        raise ValueError()
     
     @staticmethod
     def define_neighbourhood(motif_start : int, motif_stop : int, 
@@ -200,8 +198,7 @@ class Neighbourhood:
         '''
         motif_span = motif_stop - motif_start
         if motif_span > neighbourhood_size:
-            error = f'{motif_span} larger than neighbourhood size {neighbourhood_size}'
-            raise ValueError(error)
+            raise ValueError()
         #round extension down to get an int - cannot have half a basepair
         extension = int((neighbourhood_size - motif_span)/2)
         neighbourhood_start = motif_start - extension
@@ -382,7 +379,7 @@ def make_filepath(name_type : str, type_map : dict, folder : str) -> str:
     return f'{folder}\\{temp_file}'
 
 def write_results (results_folder : str, neighbourhood : Neighbourhood,
-                   filenames : str, scale : str) -> str:
+                   filenames : str, scale : str, logger_name : str) -> str:
     '''
     Make a scale-specific sub-folder in results_folder if one does not exist.  
     Make a filepath incorporating user-specified data.  Get a record of 
@@ -398,6 +395,8 @@ def write_results (results_folder : str, neighbourhood : Neighbourhood,
         What data should be used to name file (organism or accession).
     scale : str
         Write genome or neighbourhood SeqRecord to file.
+    logger_name : str
+        name of logger in which to record results
 
     Returns
     -------
@@ -421,5 +420,41 @@ def write_results (results_folder : str, neighbourhood : Neighbourhood,
     record = get_record(neighbourhood, scale)
     write_genbank_file(record, path)
     
-    #return filepath
+    #log results
+    logger = logging.getLogger(logger_name)
+    logger.info(f'written {neighbourhood.accession} {scale.upper()} to {path}')
+    
     return path
+
+def log_neighbourhood_details(neighbourhood : Neighbourhood, logger_name : str) -> str:
+    '''
+    Checks a Neoghbourhood object to see if it has been built successfully.  If
+    it hasn't, a short description of the reason is returned for handling in 
+    pipelines.sieve() and a full description is logged.
+
+    Parameters
+    ----------
+    neighbourhood : Neighbourhood
+        Neighbourhood being checked.
+    logger_name : str
+        name of logger in which to record results.
+
+    Returns
+    -------
+    str
+        Short description of logged message.
+
+    '''
+    logger = logging.getLogger(logger_name)
+    if neighbourhood.scrape_error != None:
+        logger.warning(f'scrape_fail - {neighbourhood.scrape_error} - {neighbourhood.accession}')
+        return 'scrape_fail'
+    elif neighbourhood.overlapping_termini:
+        logger.warning(f'overlapping_termini - {neighbourhood.accession}')
+        return 'overlapping_termini'
+    elif neighbourhood.motif_to_long:
+        logger.warning(f'motif is longer than specified neighbourhood - {neighbourhood.accession}')
+        return 'long_motif'
+    logger.info(f'neighbourhood = {neighbourhood.neighbourhood_start} -> '\
+                    f'{neighbourhood.neighbourhood_stop}')
+    return 'success'

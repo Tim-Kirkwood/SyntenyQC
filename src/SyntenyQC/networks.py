@@ -7,19 +7,23 @@ Created on Wed Jul  3 13:31:39 2024
 import networkx as nx
 import shutil
 from SyntenyQC.helpers import get_gbk_files, read_gbk, get_protein_seq
+import logging 
  
 '''
 this module contains code for RBH similarity network construction and 
-manipulation - used by pipelines.sieve()
+manipulation - used by pipelines.sieve().
+
+Note - should probably just make into a module...
 '''
 class PrunedGraphWriter:
     'Class that builds, prunes and writes files based on a similarity graph'
     def __init__(self, 
-                 folder_with_genbanks : str, 
+                 input_genbank_dir : str, 
                  reciprocal_best_hit_matrix : dict, 
                  similarity_filter : float,
                  min_edge_view : float,
-                 results_folder : str) -> None:
+                 output_genbank_dir : str,
+                 logger_name : str) -> None:
         '''
         Build a network where gbk files in folder_with_genbanks are nodes and 
         edges are the number of shared RBHs between two files as a proportion 
@@ -29,8 +33,9 @@ class PrunedGraphWriter:
 
         Parameters
         ----------
-        folder_with_genbanks : str
-            Folder containing gbk files (and maybe other file types/folders).
+        input_genbank_folder : str
+            Folder containing gbk files for sieveing (and maybe other file 
+                                                      types/folders).
         reciprocal_best_hit_matrix : dict
             Reciprocal best hit matix from blast_functions.make_rbh_matrix().
             Format (numbers are CDS):
@@ -52,12 +57,14 @@ class PrunedGraphWriter:
             Minimmum edge weight for an edge to be included in the graph. This 
             setting is purely used for viusalisation and has no impact on graph 
             pruning.
-        results_folder : str
-            Folder to copy post-pruning files into.
+        output_genbank_folder : str
+            Folder to copy post-pruning genbank files into.
+        logger_name : 
+            name of logger to record results
         '''
         
         #get number of proteins in each gbk file
-        neighbourhood_size_map = self.build_neighbourhood_size_map(folder_with_genbanks)
+        neighbourhood_size_map = self.build_neighbourhood_size_map(input_genbank_dir)
         
         #make a similarity graph
         self.raw_graph = self.make_graph(reciprocal_best_hit_matrix, 
@@ -72,9 +79,16 @@ class PrunedGraphWriter:
         
         #copy the files that survive filtering
         self.written_nodes = self.write_nodes(self.nodes, 
-                                              folder_with_genbanks, 
-                                              results_folder
+                                              input_genbank_dir, 
+                                              output_genbank_dir
                                               )
+        
+        #log summary of pruning outcome
+        self.log_results(nodes_to_write = self.nodes,
+                         written_nodes = self.written_nodes,
+                         number_of_nodes = len(self.raw_graph.nodes),
+                         output_genbank_dir = output_genbank_dir,
+                         logger_name = logger_name)
         
         
     @staticmethod 
@@ -236,6 +250,7 @@ class PrunedGraphWriter:
         
         #prune
         while True:
+            
             #make temporary subgraph of input graph using nodes 
             temp_G = copy_graph.subgraph(nodes)
             
@@ -261,7 +276,8 @@ class PrunedGraphWriter:
     
     
     @staticmethod 
-    def write_nodes(nodes : list, genbank_folder : str, results_folder : str) -> list:
+    def write_nodes(nodes : list, input_genbank_dir : str, 
+                    output_genbank_dir : str) -> list:
         '''
         Copy files with a filename in nodes from genbank_folder to results_folder 
 
@@ -269,9 +285,9 @@ class PrunedGraphWriter:
         ----------
         nodes : list
             Target filenames to copy.
-        genbank_folder : str
+        input_genbank_dir : str
             Source folder with files to copy.
-        results_folder : str
+        output_genbank_folder : str
             Destination folder of files to copy.
 
         Returns
@@ -280,7 +296,7 @@ class PrunedGraphWriter:
             List of files (with no suffix) that have been written.
 
         '''
-        gbk_files = get_gbk_files(genbank_folder)
+        gbk_files = get_gbk_files(input_genbank_dir)
         written_nodes = []
         for file in gbk_files:
             
@@ -292,8 +308,8 @@ class PrunedGraphWriter:
                 #TODO add a check for the copied file being in the results_folder 
                 #already (should not be possible though, results folder will be newly
                 #made in app.py).
-                this_path = f'{genbank_folder}\\{file}'
-                new_path = f'{results_folder}\\{file}'
+                this_path = f'{input_genbank_dir}\\{file}'
+                new_path = f'{output_genbank_dir}\\{file}'
                 shutil.copy(src = this_path, 
                             dst = new_path)
                 
@@ -302,3 +318,49 @@ class PrunedGraphWriter:
 
         return written_nodes
         
+    @staticmethod
+    def log_results(nodes_to_write : list, written_nodes : list, 
+                    number_of_nodes : int, output_genbank_dir : str, 
+                    logger_name : str):
+        '''
+        Logs pruning summary and says where files are written.  If there is an 
+        error, describes error before raising ValueError exception. 
+
+        Parameters
+        ----------
+        nodes_to_write : list
+            Nodes that survive graph pruning.
+        written_nodes : list
+            Nodes (files) that have been copied to output_genbank_dir.
+        number_of_nodes : int
+            Number of nodes in graph before pruning.
+        output_genbank_dir : str
+            Folder where genbank files that survive pruning are written.
+        logger_name : str
+            name of logger to record results.
+
+        Raises
+        ------
+        ValueError
+            - nodes_to_write != written_nodes
+            - no nodes_to_write or written_nodes (should always be >= 1).
+
+
+
+        '''
+        logger = logging.getLogger(logger_name)
+        if sorted(nodes_to_write) != sorted(written_nodes):
+            if nodes_to_write == []:
+                error = 'No nodes were available to write'
+            elif written_nodes == []:
+                error = 'No nodes were written'
+            else:
+                error = 'WRITTEN nodes and PRUNED node names dont match\n'\
+                             f'PRUNED NODES:\n{nodes_to_write}\n\n'\
+                                 f'WRITTEN NODES:\n{written_nodes}'
+            logger.error(error)
+            raise ValueError(error)   
+        else:
+            logger.info(f'Pruned graph - written {len(written_nodes)} out of '\
+                            f'{number_of_nodes} initial neighbourhoods '\
+                                f'to {output_genbank_dir}')

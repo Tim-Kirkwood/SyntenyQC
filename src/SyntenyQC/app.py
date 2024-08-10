@@ -6,6 +6,7 @@ Created on Fri Apr  5 13:45:42 2024
 """
 import argparse
 from SyntenyQC.pipelines import collect, sieve
+from SyntenyQC.helpers import get_gbk_files
 import os
 
 '''
@@ -13,16 +14,15 @@ This module contains command line parser functions to convert sys.argv commands
 into parameters supplied to either pipelines.collect() or pielines.sieve().
 '''
 
-#TODO add line breaks to long strings
 
 def mixed_slashes(path : str) -> bool:
     '''
-    Check if an input string (assumed to be a path) path has both forward (/) 
+    Check if an input string (assumed to be a path) has both forward (/) 
     and backward (\\) slashes.
     
-    Note - os.isdir and os.isfile dont care about mixed slashes.  This function 
-    is included to check user inputs - if a user inputs a mixed-slash path then 
-    that suggests the user may be doing something wrong. 
+    Note - os.isdir and os.isfile dont care about mixed slashes, but if a user 
+    inputs a mixed-slash path then that suggests the user may be doing something 
+    wrong (so this function forces them to be careful). 
 
 
     Parameters
@@ -233,8 +233,8 @@ Once COLLECT has been run, a new folder with the same name as the binary file sh
 Filter redundant genomic neighbourhoods based on neighbourhood similarity:
 - First, an all-vs-all BLASTP is performed with user-specified BLASTP settings and the neighbourhoods in GENBANK_FOLDER.  
 - Secondly, these are parsed to define reciprocal best hits between every pair of neighbourhoods.  
-- Thirdly, these reciprocal best hits are used to derive a neighbourhood similarity network, where edges indicate two neighbourhood nodes that have a similarity > SIMILARITY_FILTER. Similarity = (Number of RBHs - CONSERVED_NEIGHBOURHOOD_LEN) / (Number of proteins encoded in smallest neighbourhood - CONSERVED_NEIGHBOURHOOD_LEN).   
-- Finally, this network is pruned to remove neighbourhoods that exceed the user's SIMILARITY_FILTER threshold
+- Thirdly, these reciprocal best hits are used to derive a neighbourhood similarity network, where edges indicate two neighbourhood nodes that have a similarity > SIMILARITY_FILTER. Similarity = Number of RBHs / Number of proteins in smallest neighbourhood in pair.   
+- Finally, this network is pruned to remove neighbourhoods that exceed the user's SIMILARITY_FILTER threshold. Nodes that remain are copied to the newly created folder "genbank_folder/sieve_results/genbank".
 ''',
                                         formatter_class=argparse.RawDescriptionHelpFormatter)
     
@@ -284,9 +284,10 @@ Filter redundant genomic neighbourhoods based on neighbourhood similarity:
 
 def check_args(args, parser):
     '''
-    Comapre args namespace from read_args to check whether each argument is acceptable
-    (i.e. points to existing files/folders and is within an acceptable range).  
-    Call parser.exit() if a param fails a check (this in turn raises a SystemExit).
+    Sanitise args and comapre args namespace from read_args to check whether each 
+    argument is acceptable (i.e. points to existing files/folders and is within 
+    an acceptable range). Call parser.exit() if a param fails a check (this in 
+    turn raises a SystemExit).
     
     Error codes:
         1 = incompatible inputs (e.g. input outside of allowed range)
@@ -322,14 +323,19 @@ def check_args(args, parser):
             
     elif args.command == 'sieve':
         
-        #GENBANK FOLDER - check and sanitise
+        #GENBANK FOLDER 
+        #check/sanitise path
         error_code, message = check_dir_path_errors('genbank_folder', 
                                                     args.genbank_folder)
         if error_code != None:
             parser.exit(error_code, message)
         else:
             args.genbank_folder = args.genbank_folder.replace('/', '\\')
-            
+        #check genbank folder has >= 1 gbk file
+        if get_gbk_files(args.genbank_folder) == []:
+            parser.exit(2, 
+                        f'No genbank (.gbk, .gb) files in {args.genbank_folder}')
+        
         #SIMILARITY FILTER
         if not 0 < args.similarity_filter <= 1:
             parser.exit(1, 
@@ -417,20 +423,17 @@ def main_cli(arg_list: list[str] | None = None):
         
     elif args.command == 'sieve':
         
-        #if genbank_folder = a/folder, make a new dir a/folder/ClusterSieve 
-        #to contain results 
-        results_dir = make_dirname(args.genbank_folder,'ClusterSieve')
-        os.makedirs(results_dir)
+        #if genbank_folder = a/folder, make new dir a/folder/sieve_results
+        results_dir = make_dirname(args.genbank_folder,'sieve_results')
         
         #run pipelines.sieve()
-        results_path = sieve(genbank_folder = args.genbank_folder, 
-                              e_value = args.e_value, 
-                              min_percent_identity = args.min_percent_identity, 
-                              max_target_seqs = args.max_target_seqs,
-                               
-                              similarity_filter = args.similarity_filter,
-                              results_dir = results_dir,
-                              min_edge_view = args.min_edge_view)
+        results_path = sieve(input_genbank_dir = args.genbank_folder, 
+                             e_value = args.e_value, 
+                             min_percent_identity = args.min_percent_identity, 
+                             max_target_seqs = args.max_target_seqs,
+                             similarity_filter = args.similarity_filter,
+                             results_dir = results_dir,
+                             min_edge_view = args.min_edge_view)
         
         #exit upon successuful completion 
         parser.exit(status = 0, 
@@ -443,5 +446,3 @@ def main_cli(arg_list: list[str] | None = None):
         #remind me to update this function (and others) if I add more commands 
         parser.exit(1, f'Subcommand not recognised - {args.command}')
     
-if __name__ == '__main__':
-    main_cli()

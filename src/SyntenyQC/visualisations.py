@@ -6,9 +6,10 @@ Created on Wed Jul 17 16:31:23 2024
 """
 import networkx as nx
 import plotly.graph_objects as go
+import logging
 
 def write_graph(graph : nx.Graph, path : str, similarity_filter : float, 
-                min_edge_view : float) -> None:
+                min_edge_view : float, logger_name : str) -> None:
     '''
     Write graph to html figure.
 
@@ -24,7 +25,8 @@ def write_graph(graph : nx.Graph, path : str, similarity_filter : float,
     min_edge_view : float
         Minimum similarity for an edge between two nodes to be shown - used for 
         edge colouring.
-
+    logger_name : str
+        name of logger to record results
     '''
     #define node positions 
     pos = define_pos(graph)
@@ -57,6 +59,11 @@ def write_graph(graph : nx.Graph, path : str, similarity_filter : float,
     
     #write fig to html file
     fig.write_html(path)
+    
+    #log details
+    logger = logging.getLogger(logger_name)
+    logger.info(f'Made RBH graph of {len(graph.nodes)} unpruned '\
+                    f'neighbourhoods - written to {path}')
     
     
 def define_pos(graph : nx.Graph) -> dict:
@@ -209,7 +216,7 @@ def make_node_traces(graph : nx.Graph) -> go.Scatter:
     return node_trace
 
 
-def write_hist(G : nx.Graph, path : str) -> None:
+def write_hist(graph : nx.Graph, path : str, logger_name : str) -> None:
     '''
     Write histogram for edge weights in graph.
 
@@ -219,9 +226,14 @@ def write_hist(G : nx.Graph, path : str) -> None:
         Graph with edges of interest.
     path : str
         Path to write histogram.
-
+    logger_name : str
+        name of logger to write results
     '''
-    all_weights = [weight for n1, n2, weight in G.edges.data("weight")]
+    
+    #get edge weights
+    all_weights = [weight for n1, n2, weight in graph.edges.data("weight")]
+    
+    #make hist figure and write to html
     fig = go.Figure(data=[go.Histogram(x=all_weights,
                                        
                                        xbins=dict( # bins used for histogram
@@ -242,3 +254,9 @@ def write_hist(G : nx.Graph, path : str) -> None:
                            plot_bgcolor='rgba(0,0,0,0)'
                            ))
     fig.write_html(path)
+    
+    #log results
+    logger = logging.getLogger(logger_name)
+    logger.info('Made histogram showing the distribution of RBH similarities '\
+                    f'between all {len(graph.nodes)} neighbourhoods - written '\
+                        f'to {path}')

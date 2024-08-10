@@ -8,6 +8,8 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqFeature import SeqFeature 
 import os
+import logging
+import pandas as pd
 
 def read_gbk(path : str) -> SeqRecord:
     '''
@@ -72,7 +74,11 @@ def get_cds_count(genbank_folder : str) -> int:
     cds_count = 0
     for file in genbank_files:
         record = read_gbk(f'{genbank_folder}\\{file}')
-        cds_count += len([f for f in record.features if f.type == 'CDS'])
+        for f in record.features:
+            if f.type == 'CDS':
+                #not psuedo etc
+                if get_protein_seq(f) != '':
+                    cds_count += 1
     return cds_count
 
 
@@ -151,3 +157,133 @@ def get_protein_seq(cds_feature : SeqFeature) -> str:
     #Return non-empty translation
     return protein_seq
 
+
+
+def log_params(local_vars : dict, command : str, logger_name : str) -> str:
+    '''
+    Return a string showing the command and associated parameters for a given 
+    collect() call.
+
+    Parameters
+    ----------
+    command : str
+        Which command was called (collect or sieve).
+
+    local_vars : dict
+        dict of local variables in env that get_params_string is called 
+        (must include log keys of given command).
+    
+    logger_name : str
+        name of logger with which to record params.
+
+    Raises
+    ------
+    KeyError
+        Command not recognised or variable not defined in local scope (likely 
+        due to not being in parser).
+
+    Returns
+    -------
+    str
+        A string outlineing parameters used.
+
+    '''
+    logger = logging.getLogger(logger_name)
+    if command == 'collect':
+        log_keys = ['binary_path', 'strict_span', 'neighbourhood_size', 
+                    'write_genomes', 'email', 'filenames', 'results_dir']
+    elif command == 'sieve':
+        log_keys = ['input_genbank_dir', 'e_value', 'min_percent_identity', 
+                    'similarity_filter', 'results_dir', 'output_blast_dir',
+                    'output_genbank_dir', 'output_vis_dir', 'min_edge_view']
+
+         
+    else:
+        raise KeyError(f'Command {command} must be collect or sieve')
+    log_string = f'Command: {command}\n'
+    for log_key in log_keys:
+        try:
+            log_string += f'{log_key}: {local_vars[log_key]}\n'
+        except KeyError:
+            raise KeyError(f'{log_key} not in locals - {locals()}')
+            
+    logger.info(f'---PARAMETERS---\n{log_string}\n\n')
+
+def get_log_handlers(filepath : str) -> list:
+    '''
+    Return list of handlers for logging.
+
+    Parameters
+    ----------
+    filepath : str
+        Log filepath.
+
+    Returns
+    -------
+    list
+        A file handler (so there is a local log file for posterity) and a stream 
+        handler (so logs are reported at the command line for a given run).
+    '''
+    return [logging.FileHandler(filepath, 
+                                'w'),
+            logging.StreamHandler()
+            ]
+
+def initalise_log(log_file : str, logger_name : str) -> logging.Logger:    
+    '''
+    Set up logger
+
+    Parameters
+    ----------
+    log_file : str
+        File in which to write log.
+    logger_name : str
+        Name of logger.
+
+    Returns
+    -------
+    logger : logging.Logger
+        Logger object.
+
+    '''
+    log_handlers = get_log_handlers(log_file)
+    logging.basicConfig(
+                        level=logging.INFO,
+                        format='%(asctime)s %(levelname)s:  %(message)s',
+                        handlers=log_handlers
+                    )
+    logger = logging.getLogger(logger_name)
+    return logger
+
+def ingest_binary_csv(binary_path : str, logger_name : str) -> pd.DataFrame:
+    '''
+    Process binary file to pandas dataframe and check data integrity.
+
+    Parameters
+    ----------
+    binary_path : str
+        Path to cblaster binary file.
+    logger_name : str
+        Name of logger to save results.
+
+    Raises
+    ------
+    ValueError
+        Unexpected CSV format.
+
+    Returns
+    -------
+    location_data : pd.Dataframe
+        Dataframe containing cblaster binary file data.
+
+    '''
+    location_data = pd.read_csv(binary_path, sep = ',')
+    if len(location_data.columns)<=5:
+        logger = logging.getLogger(logger_name)
+        error = "Unexpected binary file format\nexpected columns - "\
+                    "['Organism', 'Scaffold', 'Start', 'End', 'Score', one or "\
+                         "more Query Gene Names].\n"\
+                             f"Actual columns: {list(location_data.columns)}"
+        logger.error(error)
+        raise ValueError(error) 
+    return location_data

@@ -4,14 +4,12 @@ Created on Wed Jul  3 13:12:57 2024
 
 @author: u03132tk
 """
-#from Bio import SeqIO
 from Bio.Blast import NCBIXML
 from Bio.Blast.Record import Alignment, HSP
-import os
 import shutil
 import subprocess
 from SyntenyQC.helpers import get_cds_count, get_gbk_files, read_gbk, get_protein_seq
-
+import os
 from typing import TextIO
 
 '''
@@ -20,7 +18,7 @@ This module outlines code for performing reciprocal best hits (used by pipelines
 
 def run_blast_process(cmd : list):
     r'''
-    this runs the BLAST+ BLASTP exe using Python via the subprocess module.
+    Run command via the subprocess module in a blastp-compatible environment.
     For discussion re env, see https://www.biostars.org/p/413294/#415002 and
     https://www.ncbi.nlm.nih.gov/books/NBK279684/table/appendices.T.makeblastdb_application_opt/
 
@@ -121,7 +119,7 @@ class FastaWriter:
     fasta format file.
     '''
     
-    def __init__(self, genbank_folder : str, output_filepath : str) -> None:
+    def __init__(self, genbank_folder : str, output_filepath : str):
         '''
         Open output_filepath in write mode and write data as described in 
         write_fasta().
@@ -156,7 +154,10 @@ class FastaWriter:
         KeyError
             There is a non-pseudo protein feature in >=1 gbk file that has no 
             protein sequence.
-
+        ValueError
+            There are no CDS features with a translation in >= 1 gbk file(s) in 
+            genbank_folder
+            
         Returns
         -------
         outfile_handle : TextIO
@@ -183,7 +184,8 @@ class FastaWriter:
                                    protein_seq)
                                   ]
                         cds_count += 1
-        
+            if cds_count == 0:
+                raise ValueError(f'{file} has no CDS features with a protein sequence')
         #write fasta data to handle
         for index, (defline, seq) in enumerate(fasta):
             assert defline[0] == '>'
@@ -198,7 +200,7 @@ class FastaWriter:
     
 
 def all_vs_all_blast(folder_with_genbanks : str, e_value : float, 
-                     max_target_seqs : int) -> str:
+                     max_target_seqs : int, blast_dir : str) -> str:
     '''
     Run all v all blast, return XML results path.
 
@@ -210,18 +212,22 @@ def all_vs_all_blast(folder_with_genbanks : str, e_value : float,
         BLASTP evalue threshold.
     max_target_seqs : int
         BLASTP max_target_seqs.
-
+    blast_dir : str
+        folder to write blast database and result files
     Returns
     -------
     str
         Path to BLASTP results xml.
     '''
     
+    #check your results directory exists
+    if not os.path.isdir(blast_dir):
+        raise ValueError (f'blast_dir does not exist - {blast_dir}')
+        
     #define filepaths
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    all_proteins = f'{current_dir}\\all_proteins.txt' 
-    all_proteins_db = f'{current_dir}\\all_proteins_db'
-    results_out_path =  f'{current_dir}\\results.xml' 
+    all_proteins = f'{blast_dir}\\all_proteins.txt' 
+    all_proteins_db = f'{blast_dir}\\all_proteins_db'
+    results_out_path =  f'{blast_dir}\\results.xml' 
     
     #find blast+ blastp and makeblast db executables
     makeblastdb_exe_path = shutil.which('makeblastdb')
@@ -234,8 +240,8 @@ def all_vs_all_blast(folder_with_genbanks : str, e_value : float,
     #run makeblastdb
     print (f'Making database - {all_proteins_db}...')
     makeblastdb_subprocess(makeblastdb_exe_path, 
-                            all_proteins, 
-                            all_proteins_db)
+                           all_proteins, 
+                           all_proteins_db)
     cds_count = get_cds_count(genbank_folder = folder_with_genbanks)
     
     #run blastp
@@ -243,12 +249,12 @@ def all_vs_all_blast(folder_with_genbanks : str, e_value : float,
                f'neighbourhoods in {folder_with_genbanks} - {cds_count} protein sequences, '\
                    f'{max_target_seqs} max_target_seqs...')  
     blastP_subprocess (e_value, 
-                        all_proteins, 
-                        blastp_exe_path, 
-                        results_out_path, 
-                        all_proteins_db, 
-                        4,
-                        max_target_seqs)
+                       all_proteins, 
+                       blastp_exe_path, 
+                       results_out_path, 
+                       all_proteins_db, 
+                       4,
+                       max_target_seqs)
     print (f'Completed BLASTP - results at {results_out_path}...')
     
     return results_out_path
@@ -302,15 +308,15 @@ def read_xml(results_path : str) -> list:
         blast_records = list(NCBIXML.parse(result_handle))
     return blast_records
 
-def results_to_hits(results_path : str, min_percent_identity : int) -> dict:
+def results_to_hits(blast_records : list, min_percent_identity : int) -> dict:
     '''
     Parse xml results to dictionary of hits. 
                 
 
     Parameters
     ----------
-    results_path : str
-        Path to xml.
+    blast_records : str
+        XML data parsed to list of biopython SeqRecords.
     min_percent_identity : int
         Min alignment identity.
 
@@ -340,7 +346,6 @@ def results_to_hits(results_path : str, min_percent_identity : int) -> dict:
 
     '''
     raw_results = {}#
-    blast_records = read_xml(results_path)
     for record in blast_records:
         query_scaffold, query_index = record.query.split('__')
         if query_scaffold not in raw_results.keys():
@@ -486,7 +491,7 @@ def best_hits_to_rbh(best_hit_matrix : dict) -> dict:
                     reciprocal_best_hits[query_scaffold][query_index][hit_scaffold] = best_hit_protein
     return reciprocal_best_hits
     
-def make_rbh_matrix(xml_path : str, min_percent_identity : int) ->dict:
+def make_rbh_matrix(xml_path : str, min_percent_identity : int) -> dict:
     '''
     Convert xml file to reciprocal best hits dictionary.
 
@@ -503,7 +508,8 @@ def make_rbh_matrix(xml_path : str, min_percent_identity : int) ->dict:
         RBH matrix represented as a dictionary.
 
     '''
-    hit_matrix = results_to_hits(xml_path, 
+    blast_records = read_xml(xml_path)
+    hit_matrix = results_to_hits(blast_records, 
                                  min_percent_identity)
     print ('Processed hits...')
     best_hit_matrix = hits_to_best_hits(hit_matrix)
