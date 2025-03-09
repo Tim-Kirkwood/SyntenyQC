@@ -14,9 +14,17 @@ Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whi
 `SyntenyQC` is a python app for the curation of neighbourhoods immediately prior to synteny plot creation. `SyntenyQC collect` supports the systematic definition and annotation of candidate neighbourhoods based on a direct integration to `cblaster`.  `SytenyQC sieve` offers a flexible method for objectively removing redundant neighbourhoods (sourced using `cblaster` or any other tool) prior to synteny plot creation.  This is in some cases an absolute requirement (e.g. `cblaster` called via the `CAGECAT` webserver places a limit of 50 neighbourhoods).  
 
 ## Installation 
+Ideally, you would make a new [virtual env](https://stackoverflow.com/questions/41972261/what-is-a-virtualenv-and-why-should-i-use-one) (e.g. with [Anaconda](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands)) and install SyntenyQC with:
 ```
 pip install SyntenyQC
 ```
+However,  some work needs to be done on dependency management - SyntenyQC only works on python versions <= 3.11 as a result of some dependencies being incompatible with Python versions >3.11 (pandas and biopython). While I fix this, it is recommended that you install in a new environment like so:
+```
+>conda create --name syntenyqc_env python=3.10 pip
+>conda activate syntenyqc_env
+>pip install SyntenyQC
+```
+
 Note - `SyntenyQC` depends on [BLAST+](https://blast.ncbi.nlm.nih.gov/doc/blast-help/downloadblastdata.html), which must be [installed](https://www.ncbi.nlm.nih.gov/books/NBK569861/) by the user (tested with v2.12.0 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `blastp -h` and `makeblastdb -h` in the command line. 
 
 ## Tests
