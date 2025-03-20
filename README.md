@@ -14,18 +14,21 @@ Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whi
 `SyntenyQC` is a python app for the curation of neighbourhoods immediately prior to synteny plot creation. `SyntenyQC collect` supports the systematic definition and annotation of candidate neighbourhoods based on a direct integration to `cblaster`.  `SytenyQC sieve` offers a flexible method for objectively removing redundant neighbourhoods (sourced using `cblaster` or any other tool) prior to synteny plot creation.  This is in some cases an absolute requirement (e.g. `cblaster` called via the `CAGECAT` webserver places a limit of 50 neighbourhoods).  
 
 ## Installation 
-Ideally, you would make a new [virtual env](https://stackoverflow.com/questions/41972261/what-is-a-virtualenv-and-why-should-i-use-one) (e.g. with [Anaconda](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-with-commands)) and install SyntenyQC with:
+**What do I do?**
+
 ```
+conda create --name syntenyqc_env pip python=3.12.9
+conda activate syntenyqc_env
 pip install SyntenyQC
 ```
-However,  some work needs to be done on dependency management - SyntenyQC only works on python versions <= 3.11 as a result of some dependencies being incompatible with Python versions >3.11 (pandas and biopython). While I fix this, it is recommended that you install in a new environment like so:
-```
->conda create --name syntenyqc_env python=3.10 pip
->conda activate syntenyqc_env
->pip install SyntenyQC
-```
+ 
+**Why do I do it?**
 
-Note - `SyntenyQC` depends on [BLAST+](https://blast.ncbi.nlm.nih.gov/doc/blast-help/downloadblastdata.html), which must be [installed](https://www.ncbi.nlm.nih.gov/books/NBK569861/) by the user (tested with v2.12.0 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `blastp -h` and `makeblastdb -h` in the command line. 
+You should install SyntenyQC within a virtual environment to make sure it doesn't interfere with any other software you have installed ([read more here](https://stackoverflow.com/q/41972261/11357695)).  There are various options for working with virtual environments, but I use `conda` - see their tutorial [here](https://docs.conda.io/projects/conda/en/stable/user-guide/tasks/manage-environments.html#).  As `SyntenyQC` is uploaded to the Python Package Index ([PyPI](https://pypi.org/)) and not Anaconda (yet - also, how is [`conda` different from Anaconda](https://stackoverflow.com/questions/30034840/what-are-the-differences-between-conda-and-anaconda) and [whats the relationship between `pip` and PyPI?](https://stackoverflow.com/questions/74307171/does-pip-only-use-pypi-or-does-it-use-other-domains-to-find-packages)), we will set up an environment using `conda`, install `pip` in that environment, and then install `SyntenyQC` using `pip` (note, Python can be any version between 3.10.0 and 3.12.9 inclusive).  
+
+**Software you need to install manually**
+
+`SyntenyQC` depends on [BLAST+](https://blast.ncbi.nlm.nih.gov/doc/blast-help/downloadblastdata.html), which must be [installed](https://www.ncbi.nlm.nih.gov/books/NBK569861/) by the user (tested with v2.12.0 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `blastp -h` and `makeblastdb -h` in the command line.   
 
 ## Tests
 Tests are performed using [pytest](https://pypi.org/project/pytest/), but are not distributed with `SyntenyQC`.  To run tests:
