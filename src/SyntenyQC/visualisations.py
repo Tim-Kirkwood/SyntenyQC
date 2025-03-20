@@ -38,11 +38,10 @@ def write_graph(graph : nx.Graph, path : str, similarity_filter : float,
     
     #build figure
     title = f'Reciprocal Best Hits network (similarity filter {similarity_filter}, '\
-                 'min edge shown {min_edge_view})'
+                 f'min edge shown {min_edge_view})'
     fig = go.Figure(data=[*edge_traces, 
                           node_trace],
                     layout=go.Layout(title=title,
-                                     titlefont_size=16,
                                      showlegend=False,
                                      hovermode='closest',
                                      margin=dict(b=20,l=5,r=5,t=40),
@@ -197,8 +196,7 @@ def make_node_traces(graph : nx.Graph) -> go.Scatter:
             colorbar=dict(
                 thickness=15,
                 title='Node Connections',
-                xanchor='left',
-                titleside='right'
+                xanchor='left'#,
             ),
             line_width=2))
     
@@ -236,16 +234,12 @@ def write_hist(graph : nx.Graph, path : str, logger_name : str) -> None:
     #make hist figure and write to html
     fig = go.Figure(data=[go.Histogram(x=all_weights,
                                        
-                                       xbins=dict( # bins used for histogram
-                                                    start=0,
-                                                    end=1,
-                                                    size=0.05
-                                                ),
-                                       autobinx = False
+                                        xbins=dict( # bins used for histogram
+                                                     size=0.05
+                                                 ),
                                                 )],
                     layout=go.Layout(
                            title='RBH similarities',
-                           titlefont_size=16,
                            showlegend=False,
                            hovermode='closest',
                            margin=dict(b=20,l=5,r=5,t=40),
