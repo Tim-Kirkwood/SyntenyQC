@@ -1,6 +1,10 @@
 # NOTE - this app has only been tested on the Windows OS
 
 # SyntenyQC
+## Citation:
+TBC
+
+Note, users wishing to replicate the original analysis in citation above should visit https://github.com/Tim-Kirkwood/SyntenyQC_application_note. 
 ## Motivation: 
 Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whilst synteny plots are often included as part of larger software suites (e.g. the `antiSMASH` ClusterBlast module), various low-code, stand-alone tools are now available that allow users to source candidate neighbourhoods and build their own synteny plots.  However, a gap remains between: 
 
