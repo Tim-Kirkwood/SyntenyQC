@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "SyntenyQC"
-version = "1.6post1"
+version = "1.6post2"
 requires-python = "<= 3.12.9,>=3.10.0"
 dependencies = [
   "plotly>=6.0.0,<7.0.0",

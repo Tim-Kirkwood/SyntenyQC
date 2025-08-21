@@ -1,10 +1,6 @@
 # NOTE - this app has only been tested on the Windows OS
 
 # SyntenyQC
-## Citation:
-TBC
-
-Note, users wishing to replicate the original analysis in citation above should visit https://github.com/Tim-Kirkwood/SyntenyQC_application_note. 
 ## Motivation: 
 Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whilst synteny plots are often included as part of larger software suites (e.g. the `antiSMASH` ClusterBlast module), various low-code, stand-alone tools are now available that allow users to source candidate neighbourhoods and build their own synteny plots.  However, a gap remains between: 
 
@@ -21,14 +17,14 @@ Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whi
 **What do I do?**
 
 ```
-conda create --name syntenyqc_env pip python=3.12.9
+conda create --name syntenyqc_env pip python=3.12.9 numpy=1.24 scipy=1.10
 conda activate syntenyqc_env
 pip install SyntenyQC
 ```
  
 **Why do I do it?**
 
-You should install SyntenyQC within a virtual environment to make sure it doesn't interfere with any other software you have installed ([read more here](https://stackoverflow.com/q/41972261/11357695)).  There are various options for working with virtual environments, but I use `conda` - see their tutorial [here](https://docs.conda.io/projects/conda/en/stable/user-guide/tasks/manage-environments.html#).  As `SyntenyQC` is uploaded to the Python Package Index ([PyPI](https://pypi.org/)) and not Anaconda (yet - also, how is [`conda` different from Anaconda](https://stackoverflow.com/questions/30034840/what-are-the-differences-between-conda-and-anaconda) and [whats the relationship between `pip` and PyPI?](https://stackoverflow.com/questions/74307171/does-pip-only-use-pypi-or-does-it-use-other-domains-to-find-packages)), we will set up an environment using `conda`, install `pip` in that environment, and then install `SyntenyQC` using `pip` (note, Python can be any version between 3.10.0 and 3.12.9 inclusive).  
+You should install SyntenyQC within a virtual environment to make sure it doesn't interfere with any other software you have installed ([read more here](https://stackoverflow.com/q/41972261/11357695)).  There are various options for working with virtual environments, but I use `conda` - see their tutorial [here](https://docs.conda.io/projects/conda/en/stable/user-guide/tasks/manage-environments.html#).  As `SyntenyQC` is uploaded to the Python Package Index ([PyPI](https://pypi.org/)) and not Anaconda (yet - also, how is [`conda` different from Anaconda](https://stackoverflow.com/questions/30034840/what-are-the-differences-between-conda-and-anaconda) and [whats the relationship between `pip` and PyPI?](https://stackoverflow.com/questions/74307171/does-pip-only-use-pypi-or-does-it-use-other-domains-to-find-packages)), we will set up an environment using `conda`, install `pip` in that environment, and then install `SyntenyQC` using `pip` (note, Python can be any version between 3.10.0 and 3.12.9 inclusive).  You need to install `numpy` and `scipy` as well, because they are needed by the `networkx` dependency, but aren't included when that dependency is downloaded for SyntenyQC because of a mistake in the SyntenyQC TOML (the document that tells `pip` what to install).  This TOML issue is fixed in SyntenyQC version 2.
 
 **Software you need to install manually**
 
