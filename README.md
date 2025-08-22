@@ -17,18 +17,20 @@ Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whi
 **What do I do?**
 
 ```
-conda create --name syntenyqc_env pip python=3.12.9 numpy=1.24 scipy=1.10
+conda create --name syntenyqc_env pip python=3.12.9
 conda activate syntenyqc_env
 pip install SyntenyQC
 ```
  
 **Why do I do it?**
 
-You should install SyntenyQC within a virtual environment to make sure it doesn't interfere with any other software you have installed ([read more here](https://stackoverflow.com/q/41972261/11357695)).  There are various options for working with virtual environments, but I use `conda` - see their tutorial [here](https://docs.conda.io/projects/conda/en/stable/user-guide/tasks/manage-environments.html#).  As `SyntenyQC` is uploaded to the Python Package Index ([PyPI](https://pypi.org/)) and not Anaconda (yet - also, how is [`conda` different from Anaconda](https://stackoverflow.com/questions/30034840/what-are-the-differences-between-conda-and-anaconda) and [whats the relationship between `pip` and PyPI?](https://stackoverflow.com/questions/74307171/does-pip-only-use-pypi-or-does-it-use-other-domains-to-find-packages)), we will set up an environment using `conda`, install `pip` in that environment, and then install `SyntenyQC` using `pip` (note, Python can be any version between 3.10.0 and 3.12.9 inclusive).  You need to install `numpy` and `scipy` as well, because they are needed by the `networkx` dependency, but aren't included when that dependency is downloaded for SyntenyQC because of a mistake in the SyntenyQC TOML (the document that tells `pip` what to install).  This TOML issue is fixed in SyntenyQC version 2.
+You should install SyntenyQC within a virtual environment to make sure it doesn't interfere with any other software you have installed ([read more here](https://stackoverflow.com/q/41972261/11357695)).  There are various options for working with virtual environments, but I use `conda` - see their tutorial [here](https://docs.conda.io/projects/conda/en/stable/user-guide/tasks/manage-environments.html#).  As `SyntenyQC` is uploaded to the Python Package Index ([PyPI](https://pypi.org/)) and not Anaconda (yet - also, how is [`conda` different from Anaconda](https://stackoverflow.com/questions/30034840/what-are-the-differences-between-conda-and-anaconda) and [whats the relationship between `pip` and PyPI?](https://stackoverflow.com/questions/74307171/does-pip-only-use-pypi-or-does-it-use-other-domains-to-find-packages)), we will set up an environment using `conda`, install `pip` in that environment, and then install `SyntenyQC` using `pip` (note, Python can be any version between 3.10.0 and 3.12.9 inclusive).  
 
 **Software you need to install manually**
 
-`SyntenyQC` depends on [BLAST+](https://blast.ncbi.nlm.nih.gov/doc/blast-help/downloadblastdata.html), which must be [installed](https://www.ncbi.nlm.nih.gov/books/NBK569861/) by the user (tested with v2.12.0 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `blastp -h` and `makeblastdb -h` in the command line.   
+`SyntenyQC` depends on [DIAMOND](https://github.com/bbuchfink/diamond), which must be [installed](https://github.com/bbuchfink/diamond/wiki/2.-Installation) by the user (tested with v2.1.12.166 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `diamond help` (with no "-" or "--") in the command line. 
+
+Note - after you download the diamond executable file (.exe), you will probably need to add it to your [path](https://stackoverflow.com/a/56929848/11357695) - this allows your computer to understand what you mean when you type `diamond help` (or any other command).  When you add to DIAMOND to your path, `diamond help` becomes equivalent to `path/to/diamond.exe help`. This is [easy to do](https://www.eukhost.com/kb/how-to-add-to-the-path-on-windows-10-and-windows-11/) - on Windows, just go to **Start**, search for **Edit the system environment variables**, click **Environment Variables**, under **User variables** click **Path** and then **Edit**, then finally add the **path to the folder with the exe** (not the .exe filepath) to the Path variable.     
 
 ## Tests
 Tests are performed using [pytest](https://pypi.org/project/pytest/), but are not distributed with `SyntenyQC`.  To run tests:
