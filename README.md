@@ -1,4 +1,4 @@
-# NOTE - this app has only been tested on the Windows OS
+# This app has been tested on Mac, Windows and Linux.
 
 # SyntenyQC
 ## Motivation: 
@@ -30,7 +30,7 @@ You should install SyntenyQC within a virtual environment to make sure it doesn'
 
 `SyntenyQC` depends on [DIAMOND](https://github.com/bbuchfink/diamond), which must be [installed](https://github.com/bbuchfink/diamond/wiki/2.-Installation) by the user (tested with v2.1.12.166 - but should work with other versions unless there are parameter changes). If this is installed correctly, you should be able to see help messages after typing `diamond help` (with no "-" or "--") in the command line. 
 
-Note - after you download the diamond executable file (.exe), you will probably need to add it to your [path](https://stackoverflow.com/a/56929848/11357695) - this allows your computer to understand what you mean when you type `diamond help` (or any other command).  When you add to DIAMOND to your path, `diamond help` becomes equivalent to `path/to/diamond.exe help`. This is [easy to do](https://www.eukhost.com/kb/how-to-add-to-the-path-on-windows-10-and-windows-11/) - on Windows, just go to **Start**, search for **Edit the system environment variables**, click **Environment Variables**, under **User variables** click **Path** and then **Edit**, then finally add the **path to the folder with the exe** (not the .exe filepath) to the Path variable.     
+Note - after you download the diamond executable file (.exe), you will probably need to add it to your [path](https://stackoverflow.com/a/56929848/11357695) - this allows your computer to understand what you mean when you type `diamond help` into the command line.  When you add to DIAMOND to your path, `diamond help` becomes equivalent to `path/to/diamond.exe help`. This is [easy to do](https://www.eukhost.com/kb/how-to-add-to-the-path-on-windows-10-and-windows-11/) - on Windows, just go to **Start**, search for **Edit the system environment variables**, click **Environment Variables**, under **User variables** click **Path** and then **Edit**, then finally add the **path to the folder with the exe** (not the .exe filepath) to the Path variable.     
 
 ## Tests
 Tests are performed using [pytest](https://pypi.org/project/pytest/), but are not distributed with `SyntenyQC`.  To run tests:
@@ -104,33 +104,51 @@ options:
 ```
 ### Sieve subcommand:
 ```
->SyntenyQC sieve -h
-usage: SyntenyQC sieve [-h] -gf [-ev] [-mi] [-mts] [-mev] -sf
+>syntenyqc sieve -h
+usage: SyntenyQC sieve [-h] -gf [-ev] [-mts] [-mev] [-sf] [-am] [-dmts] [-ex] [-qc] [-sc] [-id] [-ks]
 
 Filter redundant genomic neighbourhoods based on neighbourhood similarity:
 - First, an all-vs-all BLASTP is performed with user-specified BLASTP settings and the neighbourhoods in GENBANK_FOLDER.
 - Secondly, these are parsed to define reciprocal best hits between every pair of neighbourhoods.
-- Thirdly, these reciprocal best hits are used to derive a neighbourhood similarity network.  Nodes are neighbourhood
-  filenames and edges indicate two neighbourhood nodes that have a similarity > SIMILARITY_FILTER.
-  Similarity = Number of RBHs / Number of proteins in smallest neighbourhood in pair.
-- Finally, this network is pruned to remove neighbourhoods that exceed the user's SIMILARITY_FILTER threshold.
-  Nodes that remain are copied to the newly created folder 'genbank_folder/sieve_results/genbank'.
+- Thirdly, these reciprocal best hits are used to derive a neighbourhood similarity network, where edges indicate two
+  neighbourhood nodes that have a similarity > SIMILARITY_FILTER. Similarity = Number of RBHs / Number of proteins in
+  smallest neighbourhood in pair.
+- Finally, this network is pruned to remove neighbourhoods that exceed the user's SIMILARITY_FILTER threshold. Nodes
+  that remain are copied to the newly created folder "genbank_folder/sieve_results/genbank".
 
 options:
   -h, --help            show this help message and exit
-  -g, --genbank_folder
+  -gf, --genbank_folder
                         Full path to folder containing neighbourhood genbank files requiring de-duplication
   -ev, --e_value    BLASTP evalue threshold. (default: 1e-05)
-  -mi, --min_percent_identity
-                        BLASTP percent identity threshold. (default: 50)
   -mts, --max_target_seqs
                         BLASTP -max_target_seqs. Maximum number of aligned sequences to keep. (default: 200)
   -mev, --min_edge_view
-                        Minimum similarity between two neighbourhoods for an edge to be drawn betweeen them in the RBH
-                        graph. Purely for visualisation of the graph HTML file - has no impact on the graph pruning
-                        results. (default: None)
+                        Minimum similarity between two neighbourhoods for an edge to be drawn betweeen them in the
+                        RBH graph. Purely for visualisation of the graph HTML file - has no impact on the graph pruning
+                        results. (default: --similarity_filter)
   -sf, --similarity_filter
-                        Similarity threshold above which two neighbourhoods are considered redundant
+                        Similarity threshold above which two neighbourhoods are considered redundant (default: 0.7)
+  -am, --alignment_mode
+                        Alignment mode used by DIAMOND (choices: fast, mid-sensitive, sensitive, more-sensitive,
+                        very-sensitive, ultra-sensitive). Without using any sensitivity option, the default mode
+                        will run which is designed for finding hits of >60 percent identity and short read alignment.
+                        Its sensitivity is between --fast and --mid-sensitive. See here
+                        https://github.com/bbuchfink/diamond/wiki/3.-Command-line-options#sensitivity-modes
+  -dmts, --dynamic_max_target_seqs
+                        If set, --max_target_seqs will be automatically defined as the numer of genbank files
+                        within --genbank_folder or --max_target_seqs, whichever is larger
+  -ex, --expand         If set, DO NOT gzip compress DIAMOND results file (will increase disk space requirments)
+  -qc, --query_cover
+                        Report only alignments above the given percentage of query cover. Note that using this option
+                        reduces performance.
+  -sc, --subject_cover
+                        Report only alignments above the given percentage of subject cover. Note that using this option
+                        reduces performance.
+  -id, --identity   Report only alignments above the given percentage of sequence identity. Note that using this option
+                    reduces performance.
+  -ks, --keep_pseudo    if set, will count pseudo entries (or missing sequences) when counting the number of proteins
+                        within a given neighbourhood for the inter-neighbourhood similarity score.
 ```
 ### Sieve pruning algorithm:
 ```
@@ -182,23 +200,24 @@ folder/with/binary/neighbourhood/organism1.gbk, ...
 ```
 ### Command:
 ```
-SyntenyQC sieve -gf folder/with/binary/neighbourhood -sf 0.7
+SyntenyQC sieve -gf folder/with/binary/neighbourhood
 ```
 ### Finishing directory structure: 
 ```
 folder/with/binary/neighbourhood/organism1.gbk, ...
                                 /sieve_results/blastp        /results.xml, db.txt, db.pin, ...   #call all be deleted
-                                              /genbank       /organism1.gbk, ...organism38.gbk   #use as e.g. clinker input
+                                              /genbank       /full_adjacency.csv, sieved_adjacency.csv, organism1.gbk, ...organism38.gbk   #use as e.g. clinker input
                                               /visualisations/RBH_graph.html, RBH_histogram.html #see what is being pruned
                                               /log.txt
 ```
 #### :green_heart: 38 neighbourhoods is OK for a synteny plot :green_heart:
 ## Notes 
-- Given filenames are purely to show number of files - `neighbourhood/sieve_results/genbank/organism1.gbk` is one of the genbanks in the `neighbourhood` folder, but may be different to `neighbourhood/organism1.gbk`.
+- The above example was performed on an earlier `SyntenyQC` version (1.0) using `BLASTP` from `BLAST+` instead of `DIAMOND`.  Everything is the same command/filepath wise (there are some new parameters, but they have defaults so the above commands would work).  However, the number of filtered neighbourhoods may be different if you try and replicate this with `SyntenyQC` version 2.  See our Application Note for neighbourhod count data using `SyntenyQC` version 2.
+- Given filenames are purely to show number of files - `neighbourhood/sieve_results/genbank/organism1.gbk` is one of the genbanks in the `neighbourhood` folder, but may be different to     `neighbourhood/organism1.gbk`.
 - `RBH_graph` is an interactive html picture of the similarity graph created by `SyntenyQC sieve` (before pruning), only showing edges with a similarity > `min_edge_view`. 
- Edges are black (< `similairty_filter`) or red (>= `similarity_filter`).
+ Edges are black (< `similairty_filter`) or red (>= `similarity_filter`).  The associated adjacency matricies for this graph before and after pruning are also saved in CSV format.  Note, unless `--min_edge_view` is set to < `--similarity_filter`, the edges in `sieved_adjacency.csv` will all be 0 (only similarities > `--min_edge_view` are included in the initial graph, so if `--min_edge_view` = `--similarity_filter` then all edges will be removed by `SyntenyQC Sieve`.).  
 - `RBH_histogram` shows the distribution of edge weights.
-- Most neighbourhoods that meet the user-defined similarity threshold `-sf` will be removed in a single sieve run.  However, the `sieve -mts` setting can impact final results.  If a protein has homologs in 251 neighboughoods and `-mts` is 250, then one of the homologs will be missed by BLASTP, and the host neighbourhood may appear less similar to the neighbourhood with the query.  Whilst a high `-mts` setting could be used for `sieve` runs pruning many neighbourhoods, this will generate large blast files that may take up a lot of space and slow down the run.  Thus, if users wish to remove the (typically 2-3) redundant neighbourhoods remaining after a single `sieve` call, they can run sieve again on the pruned results (`syntenyqc sieve -g path/to/sieve_results/genbank -sf 0.7`).   
+- Most neighbourhoods that meet the user-defined similarity threshold `-sf` will be removed in a single sieve run.  However, the `sieve -mts` setting can impact final results.  If a protein has homologs in 251 neighboughoods and `-mts` is 250, then one of the homologs will be missed by BLASTP, and the host neighbourhood may appear less similar to the neighbourhood with the query.  Whilst a high `-mts` setting could be used for `sieve` runs pruning many neighbourhoods, this will generate large blast files that may take up a lot of space and slow down the run.  Thus, if users wish to remove the (typically 2-3) redundant neighbourhoods remaining after a single `sieve` call, they can run sieve again on the pruned results (`syntenyqc sieve -g path/to/sieve_results/genbank -sf 0.7`).  See our paper, Supplementary Methods S2, for a suggested search strategy that optimises disk space and run time for large searches.   
 
 ## References
 ### `cblaster`
