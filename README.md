@@ -244,8 +244,8 @@ folder/with/binary/neighbourhood/organism1.gbk, ...
 
 **Paper (ClusterBlast was introduced in version 1):** Medema MH, Blin K, Cimermancic P, de Jager V, Zakrzewski P, Fischbach MA, Weber T, Takano E, Breitling R. antiSMASH: rapid identification, annotation and analysis of secondary metabolite biosynthesis gene clusters in bacterial and fungal genome sequences. Nucleic Acids Res. 2011 Jul;39(Web Server issue):W339-46. doi: 10.1093/nar/gkr466. Epub 2011 Jun 14. PMID: 21672958; PMCID: PMC3125804
 
+**Website (latest version):** https://antismash.secondarymetabolites.org/#!/start 
+
 ### `DIAMOND`
 
 **Paper:** Buchfink B, Reuter K, Drost HG, "Sensitive protein alignments at tree-of-life scale using DIAMOND", Nature Methods 18, 366–368 (2021). doi:10.1038/s41592-021-01101-x
-
-**Website (latest version):** https://antismash.secondarymetabolites.org/#!/start 
