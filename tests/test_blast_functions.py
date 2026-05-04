@@ -7,7 +7,7 @@ Created on Wed Jul  3 13:12:57 2024
 from Bio.SeqFeature import SeqFeature
 from Bio.SeqRecord import SeqRecord
 from Bio.Blast.Record import Blast, HSP, Alignment
-from SyntenyQC.blast_functions import FastaWriter, get_best_hsp, results_to_hits, hits_to_best_hits, best_hits_to_rbh, make_rbh_matrix 
+from SyntenyQC.blast_functions import FastaWriter, get_best_hsp, results_to_hits, hits_to_best_hits, best_hits_to_rbh, make_rbh_matrix, read_and_parse_xml 
 from io import StringIO
 import pytest
 from general_mocks import mock_get_gbk_files, mock_read_good_gbk
@@ -38,6 +38,11 @@ from general_mocks import mock_get_gbk_files, mock_read_good_gbk
 # helper function for fixtures fake_alignment() and fake_xml_results()
 # =============================================================================
 
+def make_hsp(identites, align_length, score):
+    hsp = HSP()
+    hsp.identities, hsp.align_length, hsp.score = identites, align_length, score
+    return hsp
+
 def make_alignment(name : str, test_hsp_parameters : list) -> Alignment:
     '''
     Make a fake Alignment with one HSP per tuple in test_hsp_parameters.
@@ -60,12 +65,11 @@ def make_alignment(name : str, test_hsp_parameters : list) -> Alignment:
 
     '''
     hit = Alignment()
-    hit.hit_def = name
+    hit.title = name
     hit.hsps = []
     for index, (identites, align_length, score) in enumerate(test_hsp_parameters):
-        hsp = HSP()
+        hsp = make_hsp(identites, align_length, score)
         hsp.index = index
-        hsp.identities, hsp.align_length, hsp.score = identites, align_length, score
         hit.hsps += [hsp]
     return hit
 
@@ -87,27 +91,23 @@ class TestGetBestHsp:
         alignment = make_alignment('doesnt_matter', 
                                    test_hsp_parameters)
         return alignment
+    @pytest.fixture
+    def no_hsps(self) -> Alignment:
+        test_hsp_parameters = []
+        alignment = make_alignment('doesnt_matter', 
+                                   test_hsp_parameters)
+        return alignment
     
-    @pytest.mark.parametrize('min_percent_identity,expected_hsp_index',  
-                             [(30, 2),
-                              (75, 0), #takes first hsp that meets criteria
-                              (100, 3)
-                              ]
-                             )
     def test_with_hsp(self,
                       #function args
-                      min_percent_identity : int, fake_alignment : Alignment,
-                      #test
-                      expected_hsp_index : int):
-        best_hsp = get_best_hsp(fake_alignment, 
-                                min_percent_identity)
-        assert best_hsp.index == expected_hsp_index
+                      fake_alignment : Alignment):
+        best_hsp = get_best_hsp(fake_alignment)
+        assert best_hsp.index == 2
         
     def test_without_hsp(self, 
                          #function args
-                         fake_alignment : Alignment):
-        best_hsp = get_best_hsp(fake_alignment, 
-                                min_percent_identity = 101)
+                         no_hsps : Alignment):
+        best_hsp = get_best_hsp(no_hsps)
         assert best_hsp == None
 
 
@@ -325,17 +325,57 @@ class TestMakeRbhMatrix:
                                                      hsp_parameters)]
             records += [record]
         return records
-    
+    @pytest.fixture 
+    def fake_hits(self) -> list:
+        
+        return {'file1' : {'0' : {'file1' : {'0' : make_hsp(150, 150, 100),
+                                             '1' : make_hsp(140, 150, 50)
+                                             },
+                                  'file2' : {'0' : make_hsp(140, 150, 50),
+                                             '1' : make_hsp(140, 150, 40)
+                                             }
+                                  }, 
+                           '1' : {'file1' : {'0' : make_hsp(140, 150, 50),
+                                             '1' : make_hsp(150, 150, 100)
+                                            }, 
+                                  'file2' : {'0' : make_hsp(140, 150, 50),
+                                             '1' : make_hsp(140, 150, 50)
+                                             }
+                                  }
+                            },
+                'file2' : {'0' : {'file1' : {'0' : make_hsp(140, 150, 50),
+                                             '1' : make_hsp(140, 150, 50)
+                                             },
+                                  'file2' : {'0' : make_hsp(150, 150, 100),
+                                             '1' : make_hsp(140, 150, 50)
+                                             }
+                                  },
+                           '1' : {'file1' : {'0' : make_hsp(140, 150, 50),
+                                             '1' : make_hsp(140, 150, 50)
+                                             }, 
+                                  'file2' : {'0' : make_hsp(140, 150, 50),
+                                             '1' : make_hsp(150, 150, 100)
+                                             }
+                                  }
+                           }
+                }
+        
 # =============================================================================
 #     setup fixture
 # =============================================================================
-    @pytest.fixture
-    def setup_fake_xml(self, monkeypatch, fake_xml_results):
-        def mock_read_xml(path : str) -> list:
-            return fake_xml_results
-        monkeypatch.setattr('SyntenyQC.blast_functions.read_xml', 
-                            mock_read_xml)
+    # @pytest.fixture
+    # def setup_fake_xml(self, monkeypatch, fake_xml_results):
+    #     def mock_read_xml(path : str) -> list:
+    #         return fake_xml_results
+    #     monkeypatch.setattr('SyntenyQC.blast_functions.read_xml', 
+    #                         mock_read_xml)
         
+    @pytest.fixture
+    def setup_fake_xml(self, monkeypatch, fake_hits):
+        def mock_read_and_parse_xml(xml_path : str, expand : bool) -> list:
+            return fake_hits
+        monkeypatch.setattr('SyntenyQC.blast_functions.read_and_parse_xml', 
+                            mock_read_and_parse_xml)
         
 # =============================================================================
 #     Helper function    
@@ -401,8 +441,7 @@ class TestMakeRbhMatrix:
                   #test setup
                   fake_xml_results : list):
         #fake_xml_results = read_xml('xml_path')
-        hit_matrix =  results_to_hits(fake_xml_results, 
-                                      min_percent_identity = 0) 
+        hit_matrix =  results_to_hits(fake_xml_results) 
         #no __eq__ method for hsps - so reconstruct with attrs of unterest
         assert self.reconstruct_dict(hit_matrix) == expected_reconstructed_dict
         
@@ -417,6 +456,11 @@ class TestMakeRbhMatrix:
                  setup_fake_xml, 
                  #test comparison
                  expected_reciprocal_best_hit_matrix : dict):
+        #this mocks out the gzip stuff and the "results_to_hits()" function as I cant split it up due to generator.
+        #however, results_to_hits has explicit unit tests.
         rbh_matrix =  make_rbh_matrix(xml_path = 'xml_path', 
-                                      min_percent_identity = 0) 
+                                      expand = False) 
+        assert rbh_matrix == expected_reciprocal_best_hit_matrix
+        rbh_matrix =  make_rbh_matrix(xml_path = 'xml_path', 
+                                      expand = True) 
         assert rbh_matrix == expected_reciprocal_best_hit_matrix

@@ -73,13 +73,16 @@ class TestBuildNeibourhoodSizeMap:
                             mock_read_empty_gbk)
         
     def test_normal(self, setup_read_good_gbk):
-        size_map = PrunedGraphWriter.build_neighbourhood_size_map('a_folder')
+        size_map = PrunedGraphWriter.build_neighbourhood_size_map('a_folder', keep_pseudo = False)
         assert size_map == {'file1' : 2,
                             'file2' : 2}
-    
+        size_map = PrunedGraphWriter.build_neighbourhood_size_map('a_folder', keep_pseudo = True)
+        assert size_map == {'file1' : 5,
+                            'file2' : 5}
+        
     def test_exceptions(self, setup_read_empty_gbk):
         with pytest.raises(ValueError):
-            PrunedGraphWriter.build_neighbourhood_size_map('a_folder')
+            PrunedGraphWriter.build_neighbourhood_size_map('a_folder', keep_pseudo = False)
 
 class TestMakeGraph:
     
@@ -292,19 +295,22 @@ class TestLogResults:
         assert caplog.messages == [message]
 
 
-class TestPrunedGraphWriter:
 
+class TestPrunedGraphWriter:
+    #note doesnt test csv writing
     @pytest.fixture
     def function_setup(self, monkeypatch, log_setup):
         @staticmethod
-        def mock_build_neighbourhood_size_map(genbank_folder : str) -> dict:
+        def mock_build_neighbourhood_size_map(genbank_folder : str, keep_pseudo : bool) -> dict:
             return {'file1' : 2, 'file2' : 2, 'file3' : 3, 'file4' : 2}
         def mock_copy(src : str, dst : str):
             pass 
+        
         monkeypatch.setattr('shutil.copy', 
                             mock_copy)
         monkeypatch.setattr('SyntenyQC.networks.PrunedGraphWriter.build_neighbourhood_size_map',
                             mock_build_neighbourhood_size_map)
+        
         
     @pytest.fixture
     def setup_nodes_written_ok(self, function_setup, monkeypatch):
@@ -356,7 +362,9 @@ class TestPrunedGraphWriter:
                                     similarity_filter = 0.5,
                                     min_edge_view = 0.5,
                                     output_genbank_dir = 'output_dir',
-                                    logger_name = 'collect')
+                                    logger_name = 'collect',
+                                    keep_pseudo = False,
+                                    write_csv = False)
         assert obj.nodes == ['file3', 'file4']
         message = 'Pruned graph - written 2 out of 4 initial neighbourhoods to output_dir'
         assert caplog.messages == [message]
@@ -370,7 +378,9 @@ class TestPrunedGraphWriter:
                                         similarity_filter = 0.5,
                                         min_edge_view = 0.5,
                                         output_genbank_dir = 'output_dir',
-                                        logger_name = 'collect')
+                                        logger_name = 'collect',
+                                        keep_pseudo = False,
+                                        write_csv = False)
         assert caplog.messages == ['No nodes were available to write']
     
     def test_no_nodes_written(self, reciprocal_best_hit_matrix : dict, 
@@ -382,7 +392,9 @@ class TestPrunedGraphWriter:
                                         similarity_filter = 0.5,
                                         min_edge_view = 0.5,
                                         output_genbank_dir = 'output_dir',
-                                        logger_name = 'collect')
+                                        logger_name = 'collect',
+                                        keep_pseudo = False,
+                                        write_csv = False)
         assert caplog.messages == ['No nodes were written']
         
     def test_different_nodes_written(self, reciprocal_best_hit_matrix : dict, 
@@ -394,7 +406,9 @@ class TestPrunedGraphWriter:
                                         similarity_filter = 0.5,
                                         min_edge_view = 0.5,
                                         output_genbank_dir = 'output_dir',
-                                        logger_name = 'collect')
+                                        logger_name = 'collect',
+                                        keep_pseudo = False,
+                                        write_csv = False)
         message = 'WRITTEN nodes and PRUNED node names dont match\n'\
                      "PRUNED NODES:\n['file3', 'file4']\n\n"\
                          "WRITTEN NODES:\n['file1', 'file2', 'file3', 'file4']"

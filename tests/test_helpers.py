@@ -295,9 +295,17 @@ class TestLogParams:
                 "e_value" : "ev",
                 "results_dir" : "rd",
                 "output_vis_dir" : "ovd",
-                "min_percent_identity" : "mpi",
                 "output_blast_dir" : "obd",
-                "min_edge_view" : "mev"}
+                "min_edge_view" : "mev",
+                "max_target_seqs" : 'mts',
+                "alignment_mode" : 'am',
+                "expand" : 'e',
+                "query_cover" : 'qc',
+                "subject_cover" : 'sc', #set to 0
+                "identity" : 'i',
+                "keep_pseudo" : 'kp'
+                }
+              
     
     @pytest.fixture
     def bad_sieve_vars(self) -> dict:
@@ -307,9 +315,15 @@ class TestLogParams:
                 "e_value" : "ev",
                 "results_dir" : "rd",
                 "output_vis_dir" : "ovd",
-                "min_percent_identity" : "mpi",
                 "output_blast_dir" : "obd",
-                #"min_edge_view" : "mev",
+                "min_edge_view" : "mev",
+                "max_target_seqs" : 'mts',
+                "alignment_mode" : 'am',
+                "expand" : 'e',
+                "query_cover" : 'qc',
+                "subject_cover" : 'sc', #set to 0
+                "identity" : 'i',
+                #"keep_pseudo" : 'kp'
                 }
         
     def test_collect(self, initialised_log : logging.Logger, collect_vars : dict, 
@@ -340,13 +354,21 @@ class TestLogParams:
                     'Command: sieve\n'\
                         'input_genbank_dir: igd\n'\
                             'e_value: ev\n'\
-                                'min_percent_identity: mpi\n'\
+                                'max_target_seqs: mts\n'\
                                     'similarity_filter: sf\n'\
                                         'results_dir: rd\n'\
+                                            'min_edge_view: mev\n'\
+                                                'alignment_mode: am\n'\
+                                                'expand: e\n'\
+                                                'query_cover: qc\n'\
+                                                'subject_cover: sc\n'\
+                                                'identity: i\n'\
+                                                'keep_pseudo: kp\n'\
                                             'output_blast_dir: obd\n'\
                                                 'output_genbank_dir: ogd\n'\
-                                                    'output_vis_dir: ovd\n'\
-                                                        'min_edge_view: mev\n\n\n'
+                                                    'output_vis_dir: ovd\n\n\n'
+        
+
         assert caplog.messages == [message]
         
         

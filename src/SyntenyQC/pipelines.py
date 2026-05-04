@@ -20,11 +20,17 @@ This module outlines the collect() and sieve() pipelines
 
 def sieve(input_genbank_dir : str, 
           e_value : float, 
-          min_percent_identity : int, 
           max_target_seqs : int,
           similarity_filter : float,
           results_dir : str,
-          min_edge_view : float) -> str:
+          min_edge_view : float,
+          alignment_mode : str,
+          expand, #1
+          query_cover, 
+          subject_cover, #set to 0
+          identity,
+          keep_pseudo
+          ) -> str:
     '''
     Run sieve pipeline to filter redundant neighbourhoods from genbank_folder.
     Redundant neighbourhoods share >= similarity_filter proportion of BLASTP 
@@ -42,8 +48,6 @@ def sieve(input_genbank_dir : str,
         Folder with genbanks files represnting neighburhoods to filter.
     e_value : float
         BLASTP alignment evalue threshold.
-    min_percent_identity : int
-        BLASTP alignment percent identity threshold.
     max_target_seqs : int
         BLASTP max_target_Seqs parameter.
     similarity_filter : float
@@ -56,7 +60,21 @@ def sieve(input_genbank_dir : str,
         (>= similarity_filter) or black (< similarity_filter).  Otherwise, edges 
         will be black.  This setting is purely used for viusalisation and has no 
         impact on graph pruning.
-
+    alignment_mode : str
+        alignment mode for DIAMOND
+    compress : bool
+        diamond compress flag 1, if True
+    query_cover : float
+        Report only alignments above the given percentage of query cover. 
+        Note that using this option reduces performance.    
+    subject_cover : float
+        Report only alignments above the given percentage of subject cover.
+        Note that using this option reduces performance.
+    identity : float
+        Report only alignments above the given percentage of sequence identity.
+        Note that using this option reduces performance.
+    ignore_pseudo : bool
+        if set, will not count pseudo entries (or missing sequences) when counting the number of proteins within a given neighbourhood for the inter-neighbourhood similarity score. 
     Raises
     ------
     ValueError
@@ -91,16 +109,16 @@ def sieve(input_genbank_dir : str,
     #saved seperate to the distribution (i.e. at results_dir\blastp) and then 
     #let the user delete them if they wish. 
     
-    output_blast_dir = fr'{results_dir}\blastp'
-    output_genbank_dir = fr'{results_dir}\genbank'
-    output_vis_dir = fr'{results_dir}\visualisations'
+    output_blast_dir = os.path.join(results_dir, 'blastp')
+    output_genbank_dir = os.path.join(results_dir, 'genbank')
+    output_vis_dir = os.path.join(results_dir, 'visualisations')
     os.makedirs(output_blast_dir)
     os.makedirs(output_genbank_dir)
     os.makedirs(output_vis_dir)
 
     #initialise and write params to log file
     logger_name = 'sieve_logger'
-    logger = initalise_log(log_file = f'{results_dir}\\log.txt', 
+    logger = initalise_log(log_file = os.path.join(results_dir, 'log.txt'), 
                            logger_name = logger_name)
     log_params(local_vars = locals(), 
                command = 'sieve', 
@@ -110,28 +128,37 @@ def sieve(input_genbank_dir : str,
     all_v_all_blast_xml = all_vs_all_blast(input_genbank_dir, 
                                            e_value,
                                            max_target_seqs,
-                                           output_blast_dir)
-    rbh_matrix = make_rbh_matrix(all_v_all_blast_xml, 
-                                 min_percent_identity)
+                                           output_blast_dir,
+                                           alignment_mode,
+                                           
+                                           expand, #1
+                                           query_cover, 
+                                           subject_cover, #set to 0
+                                           identity
+                                           )
+    rbh_matrix = make_rbh_matrix(all_v_all_blast_xml, expand)
     
     #build and prune a similarity network from the RBH results, copy acceptable 
     #neighbourhoods from genbank_folder to results_dir, and log associated information
+    
+    #TODO expand test covverage for keep pseudo
     pruned_graph = PrunedGraphWriter(input_genbank_dir, 
                                      rbh_matrix,     
                                      similarity_filter,
                                      min_edge_view,
                                      output_genbank_dir,
-                                     logger_name)    
+                                     logger_name,
+                                     keep_pseudo)    
     
     #write graph/histogram html visualisations, save to associated path, and log 
     #associated information
     write_graph(graph = pruned_graph.raw_graph, 
-                path = f'{output_vis_dir}\\RBH_graph.html', 
+                path = os.path.join(output_vis_dir, 'RBH_graph.html'), 
                 similarity_filter = similarity_filter,
                 min_edge_view = min_edge_view, 
                 logger_name = logger_name)
     write_hist(graph = pruned_graph.raw_graph,
-               path = f'{output_vis_dir}\\RBH_histogram.html',
+               path = os.path.join(output_vis_dir, 'RBH_histogram.html'),
                logger_name = logger_name)
     return results_dir
     
@@ -189,7 +216,7 @@ def collect(binary_path : str,
     
     #initialise and write params to log file
     logger_name = 'collect_logger'
-    logger = initalise_log(log_file = f'{results_dir}\\log.txt', 
+    logger = initalise_log(log_file = os.path.join(results_dir, 'log.txt'), 
                            logger_name = logger_name)
     log_params(local_vars = locals(), 
                command = 'collect', 

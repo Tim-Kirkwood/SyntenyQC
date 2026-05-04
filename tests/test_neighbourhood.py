@@ -156,7 +156,8 @@ class TestScrapeGenome:
         ok_email = '@' in email_address
         if ok_email and updated_email:
             Entrez.email = email_address
-            with pytest.raises(HTTPError):
+            #The below doesnt raise a http error, it just returns an empty record.  I suspect ncbi have changed something, or biopython
+            with pytest.raises(ValueError):#(HTTPError):
                 Neighbourhood.scrape_genome(5, 
                                             'wrong_accession')
             with pytest.raises(ValueError):
@@ -312,30 +313,30 @@ class TestGetRecord:
             get_record (pseudo_neighbourhood, 
                         'wrong_scale')
 
-@pytest.mark.parametrize('name_type,type_map,folder,expected_outpath',  
+@pytest.mark.parametrize('name_type,type_map,folder,replace, expected_outpath',  
                          [('accession', {'accession' : 'accession', 
                                          'organism' : 'organism'},
-                           'a_folder','a_folder\\accession_(1).gbk'
+                           'a_folder',[],'a_folder\\accession_(1).gbk'
                            ),
                           ('organism', {'accession' : 'accession', 
                                         'organism' : 'organism'},
-                           'a_folder', 'a_folder\\organism_(1).gbk'
+                           'a_folder', [], 'a_folder\\organism_(1).gbk'
                            ),
                           #some organism names can have slashes
                           ('accession', {'accession' : 'accession/accession', 
                                          'organism' : 'organism\\organism'},
-                           'a_folder', 'a_folder\\accession_accession.gbk'
+                           'a_folder',['/'], 'a_folder\\accession~accession.gbk'
                            ),
                           ('organism', {'accession' : 'accession/accession', 
                                         'organism' : 'organism\\organism'},
-                           'a_folder', 'a_folder\\organism_organism.gbk'
+                           'a_folder', ['\\'], 'a_folder\\organism~organism.gbk'
                            )
                           ]
                          )
-def test_make_filepath(name_type : str, type_map : dict, folder : str, 
+def test_make_filepath(name_type : str, type_map : dict, folder : str, replace : list,
                        expected_outpath : str, monkeypatch):
     monkeypatch.setattr(os, "listdir", mock_listdir)
-    assert make_filepath(name_type, type_map, folder) == expected_outpath
+    assert make_filepath(name_type, type_map, folder, replace) == expected_outpath
     
 class TestWriteResults:
         
@@ -369,7 +370,7 @@ class TestWriteResults:
                              [('accession','a_folder\\genome', 
                                'a_folder\\genome\\pseudo_accession.gbk'),
                               ('organism', 'a_folder\\genome',
-                               'a_folder\\genome\\pseudo_organism_with_slashes.gbk'),
+                               'a_folder\\genome\\pseudo_organism~with~slashes.gbk'),
                               ]
                              )
     def test_genome(self,
@@ -394,7 +395,7 @@ class TestWriteResults:
                              [('accession', 'a_folder\\neighbourhood',
                                'a_folder\\neighbourhood\\pseudo_accession.gbk'),
                               ('organism', 'a_folder\\neighbourhood',
-                               'a_folder\\neighbourhood\\pseudo_organism_with_slashes.gbk')]
+                               'a_folder\\neighbourhood\\pseudo_organism~with~slashes.gbk')]
                              )
     def test_neighbourhood(self, 
                            #function args

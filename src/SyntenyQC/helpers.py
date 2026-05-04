@@ -50,7 +50,7 @@ def get_gbk_files(folder : str) -> list:
     gbk_files = []
     for file in files:
         #os.listdir also returns dirs, which wont have a suffix
-        if os.path.isfile(f'{folder}\\{file}'):        
+        if os.path.isfile(os.path.join(folder, file)):        
             if file[file.rindex('.') : ] in suffixes:
                 gbk_files += [file]
     return gbk_files
@@ -73,7 +73,7 @@ def get_cds_count(genbank_folder : str) -> int:
     genbank_files = get_gbk_files(genbank_folder)
     cds_count = 0
     for file in genbank_files:
-        record = read_gbk(f'{genbank_folder}\\{file}')
+        record = read_gbk(os.path.join(genbank_folder, file))
         for f in record.features:
             if f.type == 'CDS':
                 #not psuedo etc
@@ -193,9 +193,13 @@ def log_params(local_vars : dict, command : str, logger_name : str) -> str:
         log_keys = ['binary_path', 'strict_span', 'neighbourhood_size', 
                     'write_genomes', 'email', 'filenames', 'results_dir']
     elif command == 'sieve':
-        log_keys = ['input_genbank_dir', 'e_value', 'min_percent_identity', 
-                    'similarity_filter', 'results_dir', 'output_blast_dir',
-                    'output_genbank_dir', 'output_vis_dir', 'min_edge_view']
+        log_keys = ['input_genbank_dir', 'e_value',  'max_target_seqs',
+                    'similarity_filter', 'results_dir', 'min_edge_view',
+                    'alignment_mode', 'expand', 'query_cover', 
+                    'subject_cover', 'identity', 'keep_pseudo',
+                    'output_blast_dir', 'output_genbank_dir', 'output_vis_dir']
+        
+
 
          
     else:

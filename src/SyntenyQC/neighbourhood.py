@@ -336,7 +336,7 @@ def write_genbank_file(record : SeqRecord, path : str) -> None:
                      handle, 
                      "genbank")
 
-def make_filepath(name_type : str, type_map : dict, folder : str) -> str:
+def make_filepath(name_type : str, type_map : dict, folder : str, replace:str) -> str:
     '''
     Make a filepath for a Neighbourhood to be written in gbk format.  File is 
     named by either organism or accession of Neighbourhood's parent record, and 
@@ -360,12 +360,12 @@ def make_filepath(name_type : str, type_map : dict, folder : str) -> str:
 
     '''
     #name file as desired.  Note some organism names can contain slashes, so 
-    #these are filtered out.  
+    #these are filtered out.  Picked ~ as _ could result in parsing issues
+    #for names with double dashes: // or \\ --> __ --> BLASTp defline parsing 
+    #issues.
     file = type_map[name_type]
-    if '/' in file:
-        file = file.replace('/', '_')
-    if '\\' in file:
-        file = file.replace('\\', '_')
+    for char in replace:
+        file = file.replace(char, '~')
     
     #Increment the file name if there is a file of the same name in folder 
     #(until that is no longer the case).
@@ -376,7 +376,7 @@ def make_filepath(name_type : str, type_map : dict, folder : str) -> str:
         count += 1
     temp_file += '.gbk'
     
-    return f'{folder}\\{temp_file}'
+    return os.path.join(folder, temp_file)
 
 def write_results (results_folder : str, neighbourhood : Neighbourhood,
                    filenames : str, scale : str, logger_name : str) -> str:
@@ -405,16 +405,22 @@ def write_results (results_folder : str, neighbourhood : Neighbourhood,
 
     '''
     #make folder for scale if it doesnt exist
-    folder = f'{results_folder}\\{scale}'
+    folder = os.path.join(results_folder, scale)
     os.makedirs(folder, 
                 exist_ok = True)
     
     #make filename - note, you could get e.g. KeyError from a bad filenames value, 
-    #but argument compatibility is confirmed at command line.
+    #but argument compatibility is confirmed at command line.  However, you need to check name 
+    #has no forbidden chars e.g. Rhodococcus sp. (in: high G+C Gram-positive bacteria)
+    forbidden_chars = r'<>:\'"\\/|?*' #https://stackoverflow.com/a/31976060/11357695
+
+    #replace in real string
     path = make_filepath(name_type = filenames, 
-                         type_map = {'accession' : neighbourhood.genome.id, 
-                                     'organism' : neighbourhood.genome.annotations["organism"]},
-                         folder = folder)
+                         type_map = {'accession' : rf'{neighbourhood.genome.id}', 
+                                     'organism' : rf'{neighbourhood.genome.annotations["organism"]}'
+                                     },
+                         folder = folder,
+                         replace = forbidden_chars) #with "~"
     
     #write record to filepath 
     record = get_record(neighbourhood, scale)

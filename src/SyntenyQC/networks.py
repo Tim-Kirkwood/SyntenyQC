@@ -8,6 +8,7 @@ import networkx as nx
 import shutil
 from SyntenyQC.helpers import get_gbk_files, read_gbk, get_protein_seq
 import logging 
+import os
  
 '''
 this module contains code for RBH similarity network construction and 
@@ -23,7 +24,10 @@ class PrunedGraphWriter:
                  similarity_filter : float,
                  min_edge_view : float,
                  output_genbank_dir : str,
-                 logger_name : str) -> None:
+                 logger_name : str,
+                 keep_pseudo,
+                 write_csv = True  #false for testing only
+                 ) -> None:
         '''
         Build a network where gbk files in folder_with_genbanks are nodes and 
         edges are the number of shared RBHs between two files as a proportion 
@@ -61,10 +65,13 @@ class PrunedGraphWriter:
             Folder to copy post-pruning genbank files into.
         logger_name : 
             name of logger to record results
+        keep_pseudo:
+            if set, will  count cds that have no sequence when calculating neighbourhood similarity
         '''
         
         #get number of proteins in each gbk file
-        neighbourhood_size_map = self.build_neighbourhood_size_map(input_genbank_dir)
+        neighbourhood_size_map = self.build_neighbourhood_size_map(input_genbank_dir,
+                                                                   keep_pseudo)
         
         #make a similarity graph
         self.raw_graph = self.make_graph(reciprocal_best_hit_matrix, 
@@ -76,6 +83,16 @@ class PrunedGraphWriter:
         self.nodes = self.prune_graph(self.raw_graph,
                                       similarity_filter
                                       )
+        
+        #write adjacency matrix for both the full graph and the surviving nodes
+        adjacency_matrix = nx.to_pandas_adjacency(self.raw_graph)
+        surviving_adjaceny_matrix = adjacency_matrix.loc[self.nodes, self.nodes]
+        if write_csv:
+            adjacency_matrix.to_csv(os.path.join(output_genbank_dir, 'full_adjacency.csv'))
+            surviving_adjaceny_matrix.to_csv(os.path.join(output_genbank_dir, 'sieved_adjacency.csv'))
+
+        
+
         
         #copy the files that survive filtering
         self.written_nodes = self.write_nodes(self.nodes, 
@@ -92,7 +109,8 @@ class PrunedGraphWriter:
         
         
     @staticmethod 
-    def build_neighbourhood_size_map(genbank_folder : str) -> dict:
+    def build_neighbourhood_size_map(genbank_folder : str,
+                                     keep_pseudo : bool) -> dict:
         '''
         Return a dict mapping filenames (keys) to the number of protein features 
         (values) in each file. 
@@ -120,7 +138,7 @@ class PrunedGraphWriter:
         for file in genbank_files:
             
             #get a filename key
-            record = read_gbk(f'{genbank_folder}\\{file}')
+            record = read_gbk(os.path.join(genbank_folder, file))
             record_id = file[0:file.rindex('.')]
             
             #initialise count
@@ -129,10 +147,12 @@ class PrunedGraphWriter:
             #increment count for features with a translation 
             for feature in record.features:
                 if feature.type == 'CDS':
-                    translation = get_protein_seq(feature)
-                    if translation != '':
+                    if keep_pseudo:
                         size_map[record_id] += 1
-            
+                    else:
+                        translation = get_protein_seq(feature)
+                        if translation != '':
+                            size_map[record_id] += 1
             #all files should have at least one protein 
             if size_map[record_id] == 0:
                 raise ValueError(f'{file} has no annotated proteins')
@@ -308,8 +328,8 @@ class PrunedGraphWriter:
                 #TODO add a check for the copied file being in the results_folder 
                 #already (should not be possible though, results folder will be newly
                 #made in app.py).
-                this_path = f'{input_genbank_dir}\\{file}'
-                new_path = f'{output_genbank_dir}\\{file}'
+                this_path = os.path.join(input_genbank_dir, file)
+                new_path = os.path.join(output_genbank_dir, file)
                 shutil.copy(src = this_path, 
                             dst = new_path)
                 

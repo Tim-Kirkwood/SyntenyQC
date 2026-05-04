@@ -7,7 +7,7 @@ Created on Fri Apr  5 13:45:42 2024
 from SyntenyQC.app import make_dirname, mixed_slashes, check_file_path_errors, check_dir_path_errors,read_args, check_args, main_cli
 from general_mocks import mock_listdir, mock_get_gbk_files, mock_makedirs
 import pytest
-
+import os
 # =============================================================================
 # Setup fixtures specific to this module and used across multiple TestClasses
 # =============================================================================
@@ -157,7 +157,7 @@ class TestCheckFilePathErrors:
                                                path = 'path/with/slases.suffix', 
                                                suffixes = ['.suffix'])
         assert code == 2
-        assert message == '--long_var_name file does not exist.'
+        assert message == '--long_var_name file does not exist or is not a file.'
 
 class TestCheckDirPathErrors:
     @pytest.fixture
@@ -219,7 +219,7 @@ class TestReadArgsCollect:
         args, parser = read_args(command.split())
         check_args(args, parser)
         assert args.command == 'collect'
-        assert args.binary_path == 'a\\path'
+        assert args.binary_path == command.split(' ')[2]
         assert args.neighbourhood_size == 1
         assert args.email == 'an_email@domain.com'
         if '-fn accession' in command:
@@ -257,7 +257,7 @@ class TestReadArgsCollect:
         def mock_check_file_path_errors(long_var_name : str, path : str, 
                                         suffixes : list) -> tuple:
             return (2, 
-                    f'--{long_var_name} file does not exist.')
+                    f'--{long_var_name} file does not exist or is not a file.')
         monkeypatch.setattr('SyntenyQC.app.check_file_path_errors',
                             mock_check_file_path_errors)
         cmd = 'collect -bp not/a/path.csv -ns 1 -em an_email@domain.com'
@@ -265,7 +265,7 @@ class TestReadArgsCollect:
         with pytest.raises(SystemExit):
             check_args(args, parser)
         captured = capsys.readouterr()
-        assert captured.err == '--binary_path file does not exist.'
+        assert captured.err == '--binary_path file does not exist or is not a file.'
         
     def test_suffix_error(self, monkeypatch, capsys):
         def mock_check_file_path_errors(long_var_name : str, path : str, 
@@ -311,22 +311,59 @@ class TestReadArgsSieve:
     @pytest.mark.parametrize('command', 
                              ['sieve -gf a/folder -sf 0.5',
                              'sieve -gf a/folder -ev 0.05 -sf 0.5',
-                             'sieve -gf a/folder -ev 0.05 -mi 60 -sf 0.5',
-                             'sieve -gf a/folder -ev 0.05 -mi 60 -mts 250 -sf 0.5',
-                             'sieve -gf a/folder -ev 0.05 -mi 60 -mts 250 -mev 0.1 -sf 0.5',
-                             'sieve -gf a\\folder -sf 0.5',
+                             'sieve -gf a/folder -ev 0.05 -id 60 -sf 0.5',
+                             'sieve -gf a/folder -ev 0.05 -id 60 -mts 250 -sf 0.5',
+                             'sieve -gf a/folder -ev 0.05 -id 60 -mts 250 -mev 0.1',
+                             'sieve -gf a\\folder -sf 0.5 -ks',
                              'sieve -gf a\\folder -ev 0.05 -sf 0.5',
-                             'sieve -gf a\\folder -ev 0.05 -mi 60 -sf 0.5',
-                             'sieve -gf a\\folder -ev 0.05 -mi 60 -mts 250 -sf 0.5',
-                             'sieve -gf a\\folder -ev 0.05 -mi 60 -mts 250 -mev 0.1 -sf 0.5',
+                             'sieve -gf a\\folder -ev 0.05 -id 60 -sf 0.5',
+                             'sieve -gf a\\folder -ev 0.05 -mts 250 -sf 0.5 -am fast -qc 50',
+                             'sieve -gf a\\folder -ev 0.05 -id 60 -mts 1 -mev 0.1 -dmts',
                               ]
                              )
     def test_normal(self, command : str, setup_ok_dir_path_with_gbk):
         args, parser = read_args(command.split())
         check_args(args, parser)
         assert args.command == 'sieve'
-        assert args.genbank_folder == 'a\\folder'
-        assert args.similarity_filter == 0.5
+        assert args.genbank_folder == command.split(' ')[2]
+        
+        if '-sf' in command:
+            assert args.similarity_filter == 0.5
+        else:
+            assert args.similarity_filter == 0.7 #default
+         
+        if '-am' in command:
+            assert args.alignment_mode == 'fast'
+        else:
+            assert args.alignment_mode == 'default'   
+            
+        if '-ex' in command:
+            assert args.expand 
+        else:
+            assert not args.expand
+            
+        if '-qc' in command:
+            assert args.query_cover == 50
+        else:
+            assert args.query_cover == None
+        
+        if '-sc' in command:
+            assert args.subject_cover == 50
+        else:
+            assert args.subject_cover == None
+        
+        if '-ks' in command:
+            assert args.keep_pseudo
+        else:
+            assert not args.keep_pseudo 
+
+        if '-dmts' in command:
+            assert args.max_target_seqs == 2
+        else:
+            if '-mts' in command:
+                assert args.max_target_seqs == 250
+            else:
+                assert args.max_target_seqs == 200#default
         
         if '-ev' in command:
             assert args.e_value == 0.05
@@ -334,17 +371,13 @@ class TestReadArgsSieve:
             #default
             assert args.e_value == 10**-5
             
-        if '-mi' in command:
-            assert args.min_percent_identity == 60
+        if '-id' in command:
+            assert args.identity == 60
         else:
             #default
-            assert args.min_percent_identity == 50
+            assert args.identity is None
         
-        if '-mts' in command:
-            assert args.max_target_seqs == 250
-        else:
-            #default
-            assert args.max_target_seqs == 200
+      
         
         if '-mev' in command:
             assert args.min_edge_view == 0.1
@@ -358,8 +391,7 @@ class TestReadArgsSieve:
                               'sieve -bp a/path -ns 1 -em an_email@domain.com',
                               'sieve -fake_flag fake_param',
                               'sieve -sf 0.5',
-                              'sieve -gf a/folder',
-                              'sieve -gf fake_param', 
+                              
                               ]
                              )
     def test_argparse_fail(self, cmd : str):
@@ -394,7 +426,7 @@ class TestReadArgsSieve:
         with pytest.raises(SystemExit):
             check_args(args, parser)
         captured = capsys.readouterr()
-        assert captured.err == 'No genbank (.gbk, .gb) files in empty\\dir'
+        assert captured.err == 'No genbank (.gbk, .gb) files in empty/dir'
     
     @pytest.mark.parametrize('cmd', 
                              ['sieve -gf a/path -sf 0',
@@ -440,17 +472,30 @@ class TestReadArgsSieve:
         captured = capsys.readouterr()
         assert captured.err == '--e_value must be between >0 and <=1.'
     
-    @pytest.mark.parametrize('cmd', 
-                             ['sieve -gf a/path -sf 0.5 -mi 0',
-                              'sieve -gf a/path -sf 0.5 -mi 101'
-                              ]
-                             )
-    def test_mi_error(self, cmd : str, setup_ok_dir_path_with_gbk, capsys):
+    
+    def test_id_error(self, setup_ok_dir_path_with_gbk, capsys):
+        cmd = 'sieve -gf a/path -sf 0.5 -id 101'
         args, parser = read_args(cmd.split())
         with pytest.raises(SystemExit):
             check_args(args, parser)
         captured = capsys.readouterr()
-        assert captured.err == '--min_percent_identity must be between >0 and <=100.'
+        assert captured.err == '--identity 101.0 must be between >0 and <=100.'
+        cmd = 'sieve -gf a/path -sf 0.5 -id 0'
+        args, parser = read_args(cmd.split())
+        with pytest.raises(SystemExit):
+            check_args(args, parser)
+        captured = capsys.readouterr()
+        min_id_map = {'fast' : 90, 
+                      'default' : 60,
+                      'mid-sensitive' : 50,
+                      'sensitive' : 40,
+                      'more-sensitive' : 40,
+                      'very-sensitive' : 1,
+                      'ultra-sensitive' : 1
+                      }
+        assert captured.err == '--identity 0.0 is lower than the minimum recomended '\
+                               'identity for your chosen DIAMOND alignment sensistivity '\
+                               f'default: \n{min_id_map}'
     
     def test_mts_error(self, setup_ok_dir_path_with_gbk, capsys):
         cmd = 'sieve -gf a/path -sf 0.5 -mts -1'
@@ -460,39 +505,41 @@ class TestReadArgsSieve:
         captured = capsys.readouterr()
         assert captured.err == '--max_target_seqs must be between >0.' 
     
+    #TODO test other fail cases for parameters
+    
 @pytest.mark.parametrize('cmd,expected_params',
                          [
                              ('collect -bp a/path.suffix -ns 10 -em an_email@domain.com',  
-                              ['collect', 'a\\path.suffix', False, 10, False, 
+                              ['collect', 'a/path.suffix', False, 10, False, 
                                'an_email@domain.com', 'organism', 'a\\path']
                               ),
                                                                    
                              ('collect -bp a/path.suffix -ns 10 -em an_email@domain.com -fn organism',
-                              ['collect', 'a\\path.suffix', False, 10, False, 
+                              ['collect', 'a/path.suffix', False, 10, False, 
                                'an_email@domain.com', 'organism', 'a\\path']
                               ),
                           
                             ('collect -bp a/path.suffix -ns 10 -em an_email@domain.com -fn organism -sp',
-                             ['collect', 'a\\path.suffix', True, 10, False, 
+                             ['collect', 'a/path.suffix', True, 10, False, 
                               'an_email@domain.com', 'organism', 'a\\path']
                              ),
                            
                             ('collect -bp a/path.suffix -ns 10 -em an_email@domain.com -fn organism -sp -wg',
-                             ['collect', 'a\\path.suffix', True, 10, True, 
+                             ['collect', 'a/path.suffix', True, 10, True, 
                               'an_email@domain.com', 'organism', 'a\\path']
                              ),
                              
-                            ('collect -bp a/path.suffix -ns 10 -em an_email@domain.com -fn accession',
+                            ('collect -bp a\\path.suffix -ns 10 -em an_email@domain.com -fn accession',
                              ['collect', 'a\\path.suffix', False, 10, False, 
                               'an_email@domain.com', 'accession', 'a\\path']
                              ),
                             
-                            ('collect -bp a/path.suffix -ns 10 -em an_email@domain.com -fn accession -sp',
+                            ('collect -bp a\\path.suffix -ns 10 -em an_email@domain.com -fn accession -sp',
                              ['collect', 'a\\path.suffix', True, 10, False, 
                               'an_email@domain.com', 'accession', 'a\\path']
                              ),
                            
-                            ('collect -bp a/path.suffix -ns 10 -em an_email@domain.com -fn accession -sp -wg',
+                            ('collect -bp a\\path.suffix -ns 10 -em an_email@domain.com -fn accession -sp -wg',
                              ['collect', 'a\\path.suffix', True, 10, True, 
                               'an_email@domain.com', 'accession', 'a\\path']
                              ),
@@ -500,27 +547,87 @@ class TestReadArgsSieve:
 
                               
                             ('sieve -gf a/folder -sf 0.5',
-                             ['sieve', 'a\\folder', 10**-5, 50, 200, 0.5, 0.5, 
-                              'a\\folder\\sieve_results']
+                             ['sieve', 
+                              'a/folder', 
+                              10**-5, 
+                              200,
+                              0.5,
+                              
+                              0.5,
+                              'default',
+                              False, #1
+                              None, 
+                              None, #set to 0
+                              None,
+                              False,
+                              'a/folder\\sieve_results']
                              ),
                            
-                            ('sieve -gf a/folder -ev 0.05 -sf 0.5',
-                             ['sieve', 'a\\folder', 0.05, 50, 200, 0.5, 0.5, 
-                              'a\\folder\\sieve_results']
+                            ('sieve -gf a/folder -ev 0.05 -sf 0.5 -qc 50',
+                             ['sieve', 
+                              'a/folder', 
+                              0.05, 
+                              200,
+                              0.5,
+                              
+                              0.5,
+                              'default',
+                              False, #1
+                              50, 
+                              None, #set to 0
+                              None,
+                              False,
+                              'a/folder\\sieve_results']
                              ),
                             
-                            ('sieve -gf a/folder -ev 0.05 -mi 60 -sf 0.5',
-                             ['sieve', 'a\\folder', 0.05, 60, 200, 0.5, 0.5, 
+                            ('sieve -gf a/folder -ev 0.05 -id 60 -sf 0.5 -sc 50',
+                             ['sieve', 
+                              'a/folder', 
+                              0.05, 
+                              200,
+                              0.5,
+                              
+                              0.5,
+                              'default',
+                              False, #1
+                              None, 
+                              50, #set to 0
+                              60,
+                              False,
+                              'a/folder\\sieve_results']
+                             ),
+                           
+                            ('sieve -gf a\\folder -ev 0.05 -id 60 -mts 250 -am sensitive',
+                             ['sieve', 
+                              'a\\folder', 
+                              0.05, 
+                              250,
+                              0.7,
+                              
+                              0.7,
+                              'sensitive',
+                              False, #1
+                              None, 
+                              None, #set to 0
+                              60,
+                              False,
                               'a\\folder\\sieve_results']
                              ),
                            
-                            ('sieve -gf a/folder -ev 0.05 -mi 60 -mts 250 -sf 0.5',
-                             ['sieve', 'a\\folder', 0.05, 60, 250, 0.5, 0.5, 
-                              'a\\folder\\sieve_results']
-                             ),
-                           
-                            ('sieve -gf a/folder -ev 0.05 -mi 60 -mts 250 -mev 0.1 -sf 0.5',
-                             ['sieve', 'a\\folder', 0.05, 60, 250, 0.5, 0.1, 
+                            ('sieve -gf a\\folder -ev 0.05 -id 60 -mts 250 -mev 0.1 -sf 0.5 -ks',
+                             ['sieve', 
+                              'a\\folder', 
+                              0.05, 
+                              250,
+                              0.5,
+                              
+                              0.1,
+                              'default',
+                              False, #1
+                              None, 
+                              None, #set to 0
+                              60,
+                              True,
                               'a\\folder\\sieve_results']
                              )
                          ]
@@ -543,14 +650,33 @@ def test_main_cli(cmd : str, expected_params : list, monkeypatch,
                       write_genomes, email, filenames, results_dir]
         return results_dir
     
-    def mock_sieve(input_genbank_dir : str, e_value : float, 
-                   min_percent_identity : int, max_target_seqs : int,
-                   similarity_filter : float, results_dir : str, 
-                   min_edge_view : float) -> str:
+    def mock_sieve(input_genbank_dir : str, 
+                   e_value : float, 
+                   max_target_seqs : int,
+                   similarity_filter : float,
+                   results_dir : str,
+                   min_edge_view : float,
+                   alignment_mode : str,
+                   expand : bool, #1
+                   query_cover : float, 
+                   subject_cover : float | None, #set to 0
+                   identity : float,
+                   keep_pseudo : bool) -> str:
         nonlocal cli_params
         assert cli_params == []
-        cli_params = ['sieve', input_genbank_dir, e_value, min_percent_identity, 
-                      max_target_seqs, similarity_filter, min_edge_view, results_dir]
+        cli_params = ['sieve', 
+                      input_genbank_dir, 
+                      e_value, 
+                      max_target_seqs,
+                      similarity_filter,
+                      min_edge_view,
+                      alignment_mode,
+                      expand, #1
+                      query_cover, 
+                      subject_cover, #set to 0
+                      identity,
+                      keep_pseudo,
+                      results_dir]
         return results_dir
     
     monkeypatch.setattr('SyntenyQC.app.collect', mock_collect)

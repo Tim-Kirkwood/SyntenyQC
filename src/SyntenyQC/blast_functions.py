@@ -11,7 +11,7 @@ import subprocess
 from SyntenyQC.helpers import get_cds_count, get_gbk_files, read_gbk, get_protein_seq
 import os
 from typing import TextIO
-
+import gzip
 '''
 This module outlines code for performing reciprocal best hits (used by pipelines.sieve())
 '''
@@ -32,7 +32,8 @@ def run_blast_process(cmd : list):
         return subprocess.run(cmd, 
                               check=True, 
                               capture_output=True, 
-                              env={'BLASTDB_LMDB_MAP_SIZE':'1000000000'})
+                              #env={'BLASTDB_LMDB_MAP_SIZE':'1000000000'}
+                              )
     except FileNotFoundError as e1:
         print ('Command:  ', cmd)
         print ('FileNotFoundError:\n', e1)
@@ -45,7 +46,8 @@ def run_blast_process(cmd : list):
         print ('\nStd_out:\n',e2.stdout)
         return e2
 
-def makeblastdb_subprocess(makeblastdb_exe_path : str, input_fasta_path : str, 
+def makeblastdb_subprocess(diamond_exe_path : str, 
+                           input_fasta_path : str, 
                            db_out_path : str):
     r'''
     This runs the BLAST+ makeblastdb exe using Python via the subprocess module.  
@@ -68,16 +70,33 @@ def makeblastdb_subprocess(makeblastdb_exe_path : str, input_fasta_path : str,
     db_out_path : str
         File path used to write database files (do not include a file suffix).
     '''
-    return run_blast_process([makeblastdb_exe_path, 
-                              '-in', input_fasta_path, 
-                              '-out', db_out_path, 
-                              '-dbtype', 'prot'])
+    cmd = [diamond_exe_path, 
+           'makedb',
+           '--in', input_fasta_path, 
+           '--db', db_out_path, 
+           #'-dbtype', 'prot'
+           '--no-parse-seqids'
+                              ]
+    print (f"COMMAND:\n{' '.join(cmd)}\n")
+    return run_blast_process(cmd)
                           
 
 
-def blastP_subprocess(evalue_user : float, query_user : str, blastp_exe_path : str, 
-                      results_out_path : str, db_user : str, thread_num : int, 
-                      max_target_seqs : int):
+def blastP_subprocess(evalue_user : float, 
+                      query_user : str, 
+                      diamond_exe_path : str, 
+                      results_out_path : str, 
+                      db_user : str, #thread_num : int, 
+                      max_target_seqs : int,
+                      #query_cover = 50,
+                      #query_identity = 40,
+                      alignment_mode : str,
+                      
+                      expand : bool, #1
+                      query_cover : float, 
+                      subject_cover : float, #set to 0
+                      identity : float
+                      ):
     r'''
     This runs the BLAST+ blastp exe using Python via the subprocess module.  
     
@@ -99,19 +118,42 @@ def blastP_subprocess(evalue_user : float, query_user : str, blastp_exe_path : s
         BLASTP thread number.
     max_target_seqs : int
         BLASTP max_target_seqs.
+    alignment_mode : str
+        diamond alignment mode - https://github.com/bbuchfink/diamond/wiki/3.-Command-line-options#sensitivity-modes
+    expand : bool
+        diamond compress flag 1, if False
+    query_cover : float
+        Report only alignments above the given percentage of query cover. 
+        Note that using this option reduces performance.    
+    subject_cover : float
+        Report only alignments above the given percentage of subject cover.
+        Note that using this option reduces performance.
+    identity : float
+        Report only alignments above the given percentage of sequence identity.
+        Note that using this option reduces performance.
     '''
-    
-    return run_blast_process([blastp_exe_path, 
-                              '-out', fr'{results_out_path}', 
-                              '-query', fr'{query_user}', 
-                              '-db', fr'{db_user}', 
-                              '-evalue', fr'{evalue_user}', 
-                              '-outfmt', '5', 
-                              '-num_threads', fr'{thread_num}',
-                              '-max_target_seqs', str(max_target_seqs)
-                              ])
-
-
+    cmd = [diamond_exe_path, 'blastp',
+                              '--out', fr'{results_out_path}', #
+                              '--query', fr'{query_user}', #
+                              '--db', fr'{db_user}', #
+                              '--evalue', fr'{evalue_user}', #
+                              '--outfmt', '5', #
+                              '--max-target-seqs', str(max_target_seqs),#
+                              '--no-parse-seqids'
+                              ]
+    if not expand:
+        cmd += ['--compress', '1']
+    if query_cover is not None:
+        cmd += ['--query-cover', str(query_cover)]
+    if subject_cover is not None:
+        cmd += ['--subject-cover', str(subject_cover)]
+    if identity is not None:
+        cmd += ['--id', str(identity)]
+    if alignment_mode != 'default':
+        cmd += [f'--{alignment_mode}']
+    print (f"COMMAND:\n{' '.join(cmd)}\n")
+    return run_blast_process(cmd)
+#header 
 
 class FastaWriter:
     '''
@@ -166,12 +208,15 @@ class FastaWriter:
         '''
         fasta = []
         for file in get_gbk_files(genbank_folder):
-            record = read_gbk(f'{genbank_folder}\\{file}')
+            record = read_gbk(os.path.join(genbank_folder, 
+                                           file)
+                              )
             
             #Record Id will be used to split BLASTP results by input record
             #Take from filename rather than genbank annotations (e.g. organism 
             #or accession) as these may not be unique
             record_id = file[0:file.rindex('.')]
+            
             #use cds count rather thn index so you only count legitimate proteins
             cds_count = 0
             for feature in record.features:
@@ -200,7 +245,13 @@ class FastaWriter:
     
 
 def all_vs_all_blast(folder_with_genbanks : str, e_value : float, 
-                     max_target_seqs : int, blast_dir : str) -> str:
+                     max_target_seqs : int, blast_dir : str, 
+                     alignment_mode : str,
+                     expand : bool, #1
+                     query_cover : float, 
+                     subject_cover : float, #set to 0
+                     identity
+                     ) -> str:
     '''
     Run all v all blast, return XML results path.
 
@@ -225,13 +276,12 @@ def all_vs_all_blast(folder_with_genbanks : str, e_value : float,
         raise ValueError (f'blast_dir does not exist - {blast_dir}')
         
     #define filepaths
-    all_proteins = f'{blast_dir}\\all_proteins.txt' 
-    all_proteins_db = f'{blast_dir}\\all_proteins_db'
-    results_out_path =  f'{blast_dir}\\results.xml' 
+    all_proteins = os.path.join(blast_dir, 'all_proteins.txt')
+    all_proteins_db = os.path.join(blast_dir, 'all_proteins_db')
+    results_out_path =  os.path.join(blast_dir, 'results.xml')
     
     #find blast+ blastp and makeblast db executables
-    makeblastdb_exe_path = shutil.which('makeblastdb')
-    blastp_exe_path = shutil.which('blastp')#'blast-2.10.1+')
+    diamond_exe_path = shutil.which('diamond')
 
     #write fasta    
     FastaWriter(folder_with_genbanks, 
@@ -239,7 +289,7 @@ def all_vs_all_blast(folder_with_genbanks : str, e_value : float,
     
     #run makeblastdb
     print (f'Making database - {all_proteins_db}...')
-    makeblastdb_subprocess(makeblastdb_exe_path, 
+    makeblastdb_subprocess(diamond_exe_path, 
                            all_proteins, 
                            all_proteins_db)
     cds_count = get_cds_count(genbank_folder = folder_with_genbanks)
@@ -250,16 +300,22 @@ def all_vs_all_blast(folder_with_genbanks : str, e_value : float,
                    f'{max_target_seqs} max_target_seqs...')  
     blastP_subprocess (e_value, 
                        all_proteins, 
-                       blastp_exe_path, 
+                       diamond_exe_path, 
                        results_out_path, 
                        all_proteins_db, 
-                       4,
-                       max_target_seqs)
+                       #4,
+                       max_target_seqs,
+                       alignment_mode,
+                       expand,
+                       query_cover, 
+                       subject_cover,
+                       identity)
+    
     print (f'Completed BLASTP - results at {results_out_path}...')
     
     return results_out_path
 
-def get_best_hsp(alignment : Alignment, min_percent_identity : int) -> HSP:
+def get_best_hsp(alignment : Alignment) -> HSP:
     '''
     Get best high scoring pair (hsp) from a supplied BLASTP alignment, ranked 
     according to BLASTP score.
@@ -279,9 +335,6 @@ def get_best_hsp(alignment : Alignment, min_percent_identity : int) -> HSP:
     '''
     best_hsp = None
     for hsp in alignment.hsps:
-        percent_identity = 100*(hsp.identities / hsp.align_length) 
-        if percent_identity < min_percent_identity:
-            continue
         if best_hsp == None:
             best_hsp = hsp
         else:
@@ -289,33 +342,35 @@ def get_best_hsp(alignment : Alignment, min_percent_identity : int) -> HSP:
                 best_hsp = hsp
     return best_hsp
 
-def read_xml(results_path : str) -> list:
-    '''
-    Read and parse BLASTP xml results.
+# def read_xml(results_path : str) -> list:
+#     '''
+#     Read and parse BLASTP xml results.
 
-    Parameters
-    ----------
-    results_path : str
-        Path to xml file.
+#     Parameters
+#     ----------
+#     results_path : str
+#         Path to xml file.
 
-    Returns
-    -------
-    list
-        List of biopython SeqRecords.
+#     Returns
+#     -------
+#     list
+#         List of biopython SeqRecords.
 
-    '''
-    with open(results_path, 'r') as result_handle:
-        blast_records = list(NCBIXML.parse(result_handle))
-    return blast_records
+#     '''
+#     with open(results_path, 'r') as result_handle:
+#         blast_records = NCBIXML.parse(result_handle)
+    
+#     return blast_records
 
-def results_to_hits(blast_records : list, min_percent_identity : int) -> dict:
+def results_to_hits(blast_records, #generator 
+                    ) -> dict:
     '''
     Parse xml results to dictionary of hits. 
                 
 
     Parameters
     ----------
-    blast_records : str
+    blast_records : generator
         XML data parsed to list of biopython SeqRecords.
     min_percent_identity : int
         Min alignment identity.
@@ -353,8 +408,8 @@ def results_to_hits(blast_records : list, min_percent_identity : int) -> dict:
         if query_index not in raw_results[query_scaffold].keys():
             raw_results[query_scaffold][query_index] = {}
         for hit in record.alignments:
-            hit_scaffold, hit_index = hit.hit_def.split('__')
-            best_hsp = get_best_hsp(hit, min_percent_identity)
+            hit_scaffold, hit_index = hit.title.split('__')
+            best_hsp = get_best_hsp(hit)
             if hit_scaffold not in raw_results[query_scaffold][query_index].keys():
                 raw_results[query_scaffold][query_index][hit_scaffold] = {}
             raw_results[query_scaffold][query_index][hit_scaffold][hit_index] = best_hsp
@@ -491,7 +546,17 @@ def best_hits_to_rbh(best_hit_matrix : dict) -> dict:
                     reciprocal_best_hits[query_scaffold][query_index][hit_scaffold] = best_hit_protein
     return reciprocal_best_hits
     
-def make_rbh_matrix(xml_path : str, min_percent_identity : int) -> dict:
+def read_and_parse_xml(xml_path, expand):
+    if not expand:#it is gzipped
+        with gzip.open(xml_path+'.gz', 'rb') as result_handle:
+            blast_records = NCBIXML.parse(result_handle)
+            return results_to_hits(blast_records)
+    else:
+        with open(xml_path, 'r') as result_handle:
+            blast_records = NCBIXML.parse(result_handle)
+            return results_to_hits(blast_records)
+        
+def make_rbh_matrix(xml_path : str, expand) -> dict:
     '''
     Convert xml file to reciprocal best hits dictionary.
 
@@ -499,8 +564,8 @@ def make_rbh_matrix(xml_path : str, min_percent_identity : int) -> dict:
     ----------
     xml_path : str
         Path to xml results.
-    min_percent_identity : int
-        Minimum BLASTP alignment percentage.
+    expand : bool
+        if False, xml file is gzip compressed.
 
     Returns
     -------
@@ -508,9 +573,9 @@ def make_rbh_matrix(xml_path : str, min_percent_identity : int) -> dict:
         RBH matrix represented as a dictionary.
 
     '''
-    blast_records = read_xml(xml_path)
-    hit_matrix = results_to_hits(blast_records, 
-                                 min_percent_identity)
+    #if you go with a generator you have to read in the file and parse whilst it 
+    #is open, so do not split into seperate read function for now
+    hit_matrix = read_and_parse_xml(xml_path, expand)
     print ('Processed hits...')
     best_hit_matrix = hits_to_best_hits(hit_matrix)
     print ('Processed best hits')

@@ -79,7 +79,7 @@ def make_dirname(parent_dir : str, base_dir_name : str) -> str:
     while temp_dir in os.listdir(parent_dir):
         temp_dir = f'{base_dir_name}({count})'
         count += 1
-    return f'{parent_dir}\\{temp_dir}'
+    return os.path.join(parent_dir, temp_dir)
 
 
 def check_file_path_errors(long_var_name : str, path : str, suffixes : list) -> tuple:
@@ -111,7 +111,7 @@ def check_file_path_errors(long_var_name : str, path : str, suffixes : list) -> 
                 f'--{long_var_name} path cannot contain forward and backward slashes.')
     if not os.path.isfile(path):
         return (2, 
-               f'--{long_var_name} file does not exist.')
+               f'--{long_var_name} file does not exist or is not a file.')
     suffix = path[path.rindex('.'):]
     if suffix not in suffixes:
         return (1, 
@@ -251,12 +251,6 @@ Filter redundant genomic neighbourhoods based on neighbourhood similarity:
                               default = 10**-5,
                               metavar='\b',
                               help = 'BLASTP evalue threshold. (default: %(default)s)')
-    sieve_parser.add_argument("-mi", 
-                              "--min_percent_identity", 
-                              type = int, 
-                              default = 50,
-                              metavar='\b',
-                              help = 'BLASTP percent identity threshold. (default: %(default)s)')
     sieve_parser.add_argument("-mts", 
                               "--max_target_seqs", 
                               type = int, 
@@ -266,22 +260,72 @@ Filter redundant genomic neighbourhoods based on neighbourhood similarity:
     sieve_parser.add_argument("-mev", 
                               "--min_edge_view", 
                               type = float, 
-                              #default = 0.5,
                               metavar='\b',
-                              help = 'Minimum similarity between two neighbourhoods for an edge to be drawn betweeen them in the RBH graph.  Purely for visualisation of the graph HTML file - has no impact on the graph pruning results. (default: %(default)s)')
+                              help = 'Minimum similarity between two neighbourhoods for an edge to be drawn betweeen them in the RBH graph.  Purely for visualisation of the graph HTML file - has no impact on the graph pruning results. (default: --similarity_filter)')
     
     sieve_parser.add_argument("-sf", 
                               "--similarity_filter", 
                               type = float,
-                              required=True,
+                              default=0.7,
                               metavar='\b',
-                              help = 'Similarity threshold above which two neighbourhoods are considered redundant')
+                              help = 'Similarity threshold above which two neighbourhoods are considered redundant (default: %(default)s)'
+                              )
+    sieve_parser.add_argument("-am", 
+                              "--alignment_mode", 
+                              type = str,
+                              #default='very-sensitive',
+                              choices = ['fast', 
+                                         'mid-sensitive',
+                                         'sensitive',
+                                         'more-sensitive',
+                                         'very-sensitive',
+                                         'ultra-sensitive'],
+                              metavar='\b',
+                              help = 'Alignment mode used by DIAMOND (choices: %(choices)s). Without using any sensitivity option, the default mode will run which is designed for finding hits of >60 percent identity and short read alignment. Its sensitivity is between --fast and --mid-sensitive. See here https://github.com/bbuchfink/diamond/wiki/3.-Command-line-options#sensitivity-modes'
+                              )
+    sieve_parser.add_argument("-dmts", 
+                              "--dynamic_max_target_seqs", 
+                              #type = str,
+                              action = 'store_true',
+                              #metavar='\b',
+                              help = 'If set, --max_target_seqs will be automatically defined as the numer of genbank files within --genbank_folder or --max_target_seqs, whichever is larger'
+                              )
+    sieve_parser.add_argument("-ex", 
+                              "--expand", 
+                              #type = str,
+                              action = 'store_true',
+                              #metavar='\b',
+                              help = 'If set, DO NOT gzip compress DIAMOND results file (will increase disk space requirments)'
+                              )
+    sieve_parser.add_argument("-qc", 
+                              "--query_cover", 
+                              type = float,
+                              metavar='\b',
+                              help = 'Report only alignments above the given percentage of query cover. Note that using this option reduces performance.'
+                              )
+    sieve_parser.add_argument("-sc", 
+                              "--subject_cover", 
+                              type = float,
+                              metavar='\b',
+                              help = 'Report only alignments above the given percentage of subject cover. Note that using this option reduces performance.'
+                              )
+    sieve_parser.add_argument("-id", 
+                              "--identity", 
+                              type = float,
+                              
+                              metavar='\b',
+                              help = 'Report only alignments above the given percentage of sequence identity. Note that using this option reduces performance.'
+                              )
+    sieve_parser.add_argument("-ks", 
+                              "--keep_pseudo", 
+                              action = 'store_true',
+                              help = 'if set, will count pseudo entries (or missing sequences) when counting the number of proteins within a given neighbourhood for the inter-neighbourhood similarity score.'
+                              )
     args = global_parser.parse_args(arg_list)
     return args, global_parser
 
 
         
-
 def check_args(args, parser):
     '''
     Sanitise args and comapre args namespace from read_args to check whether each 
@@ -307,8 +351,10 @@ def check_args(args, parser):
                                                      ['.txt', '.csv'])
         if error_code != None:
             parser.exit(error_code, message)
-        else:
-            args.binary_path = args.binary_path.replace('/', '\\')
+        
+        #do not replace as macs etc need forward slashes to write
+        #else:
+        #    args.binary_path = args.binary_path.replace('/', '\\')
         
         #NEIGHBOURHOOD SIZE    
         if args.neighbourhood_size <=0:
@@ -329,10 +375,13 @@ def check_args(args, parser):
                                                     args.genbank_folder)
         if error_code != None:
             parser.exit(error_code, message)
-        else:
-            args.genbank_folder = args.genbank_folder.replace('/', '\\')
+        #do not replace, only windows uses backslash
+        #else:
+        #    args.genbank_folder = args.genbank_folder.replace('/', '\\')
+        
         #check genbank folder has >= 1 gbk file
-        if get_gbk_files(args.genbank_folder) == []:
+        neighbourhoods = get_gbk_files(args.genbank_folder)
+        if neighbourhoods == []:
             parser.exit(2, 
                         f'No genbank (.gbk, .gb) files in {args.genbank_folder}')
         
@@ -357,15 +406,52 @@ def check_args(args, parser):
             parser.exit(1, 
                         '--e_value must be between >0 and <=1.')
         
-        #BLASTP PERCENT IDENTITY
-        if not 0 < args.min_percent_identity <= 100:
-            parser.exit(1, 
-                        '--min_percent_identity must be between >0 and <=100.')
-        
         #BLASTP MAX TARGET SEQS
         if args.max_target_seqs <= 0:
             parser.exit(1, 
                         '--max_target_seqs must be between >0.')
+        if args.dynamic_max_target_seqs:
+            #set as the maximum of number of neighbourhoods or the user defined mts
+            args.max_target_seqs = max(len(neighbourhoods), 
+                                       args.max_target_seqs)
+        
+        #alignment mode
+        if args.alignment_mode is None:
+            args.alignment_mode = 'default'
+            
+        if args.identity is not None:
+            #DIAMOND sensitivity
+            min_id_map = {'fast' : 90, 
+                          'default' : 60,
+                          'mid-sensitive' : 50,
+                          'sensitive' : 40,
+                          'more-sensitive' : 40,
+                          'very-sensitive' : 1,
+                          'ultra-sensitive' : 1
+                          }
+            if args.identity < min_id_map[args.alignment_mode]:
+                parser.exit(1,
+                            f'--identity {args.identity} is '\
+                                f'lower than the minimum recomended identity for your '\
+                                    'chosen DIAMOND alignment sensistivity '\
+                                        f'{args.alignment_mode}: \n{min_id_map}')
+            #identity
+            if not args.identity <= 100:
+                parser.exit(1,
+                            f'--identity {args.identity} must be between >0 and <=100.')
+            
+        #coverage
+        if args.query_cover is not None:
+            if not 0 <= args.query_cover <= 100:
+                parser.exit(1,
+                            f'--query_cover {args.query_cover} must be between 0 and 100 inclusive')
+        if args.subject_cover is not None:
+            if not 0 <= args.subject_cover <= 100:
+                parser.exit(1,
+                            f'--subject_cover {args.subject_cover} must be between 0 and 100 inclusive')
+        
+        
+            
         
     else:
         #DEFENSIVE PROGRAMMING - I dont think this logic block can be entered,
@@ -401,10 +487,15 @@ def main_cli(arg_list: list[str] | None = None):
     if args.command == 'collect':
         
         #if binary_path = a/folder/binary.csv, make a new dir a/folder/binary 
-        #to contain results 
-        binary_folder = args.binary_path[0 : args.binary_path.rindex("\\")]
-        binary_file = args.binary_path[args.binary_path.rindex("\\") +1 : args.binary_path.rindex(".")]
-        results_dir = make_dirname(binary_folder, binary_file)
+        #to contain results
+        #TODO get file from os object and then filter the suffix
+        binary_folder, binary_file = os.path.split(args.binary_path)
+        
+        #binary_folder = args.binary_path[0 : args.binary_path.rindex("\\")]
+        #binary_file = args.binary_path[args.binary_path.rindex("\\") +1 : args.binary_path.rindex(".")]
+        results_dir = make_dirname(binary_folder, 
+                                   binary_file[0 : binary_file.rindex(".")]
+                                   )
         os.makedirs(results_dir)
         
         #run pipelines.collect()
@@ -429,11 +520,16 @@ def main_cli(arg_list: list[str] | None = None):
         #run pipelines.sieve()
         results_path = sieve(input_genbank_dir = args.genbank_folder, 
                              e_value = args.e_value, 
-                             min_percent_identity = args.min_percent_identity, 
                              max_target_seqs = args.max_target_seqs,
                              similarity_filter = args.similarity_filter,
                              results_dir = results_dir,
-                             min_edge_view = args.min_edge_view)
+                             min_edge_view = args.min_edge_view,
+                             alignment_mode = args.alignment_mode,
+                             expand = args.expand, #1
+                             query_cover = args.query_cover, 
+                             subject_cover = args.subject_cover, #set to 0
+                             identity = args.identity,
+                             keep_pseudo = args.keep_pseudo)
         
         #exit upon successuful completion 
         parser.exit(status = 0, 

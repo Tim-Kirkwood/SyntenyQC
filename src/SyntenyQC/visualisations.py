@@ -243,7 +243,7 @@ def write_hist(graph : nx.Graph, path : str, logger_name : str) -> None:
                            showlegend=False,
                            hovermode='closest',
                            margin=dict(b=20,l=5,r=5,t=40),
-                           xaxis=dict (range= [0, 1]),
+                           xaxis=dict (range= [0, 1.01]),
                            paper_bgcolor='rgba(0,0,0,0)',
                            plot_bgcolor='rgba(0,0,0,0)'
                            ))

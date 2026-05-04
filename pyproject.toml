@@ -4,13 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "SyntenyQC"
-version = "1.6post2"
+version = "2.0"
 requires-python = "<= 3.12.9,>=3.10.0"
 dependencies = [
   "plotly>=6.0.0,<7.0.0",
   "biopython>=1.80, <=1.83",
   "networkx>=3.0.0,<4.0.0",
-  "pandas>=2.0,<3.0"
+  "pandas>=2.0,<3.0",
+  "numpy>=1.24",
+  "scipy>=1.10,!=1.11.0,!=1.11.1"
 ]
 authors = [{name = "Timothy Kirkwood", email = "tdjkirkwood@hotmail.com"}]
 maintainers = [{name = "Timothy Kirkwood", email = "tdjkirkwood@hotmail.com"}]
@@ -21,7 +23,7 @@ keywords = ["bgc", "biosynthetic gene cluster", "synteny", "synteny plot", "geno
 classifiers = ["Development Status :: 4 - Beta",
   	       "Programming Language :: Python :: 3",
 	       "License :: OSI Approved :: MIT License",
-               "Operating System :: Microsoft :: Windows",
+               "Operating System :: OS Independent",
                "Intended Audience :: Science/Research",
                "Topic :: Scientific/Engineering :: Bio-Informatics"]
 
