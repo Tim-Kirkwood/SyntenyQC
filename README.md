@@ -1,6 +1,10 @@
 # This app has been tested on Mac, Windows and Linux.
 
 # SyntenyQC
+
+## Citation:
+Timothy D J Kirkwood, Jack A Connolly, Ee Lui Ang, Huimin Zhao, Eriko Takano, Rainer Breitling, Synteny plot quality control with SyntenyQC, Bioinformatics, 2025;, btaf626, https://doi.org/10.1093/bioinformatics/btaf626
+
 ## Motivation: 
 Synteny plots are widely used for the comparison of genomic neighbourhoods.  Whilst synteny plots are often included as part of larger software suites (e.g. the `antiSMASH` ClusterBlast module), various low-code, stand-alone tools are now available that allow users to source candidate neighbourhoods and build their own synteny plots.  However, a gap remains between: 
 
